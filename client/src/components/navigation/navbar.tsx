@@ -17,34 +17,26 @@ export function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
-            <Link href="/">
-              <a className="text-xl font-bold text-primary">Titan Fitness</a>
+            <Link href="/" className="text-xl font-bold text-primary">
+              Titan Fitness
             </Link>
 
             <div className="flex gap-4">
-              <Link href="/">
-                <a className="flex items-center gap-2 text-sm font-medium">
-                  <HomeIcon className="h-4 w-4" />
-                  Dashboard
-                </a>
+              <Link href="/" className="flex items-center gap-2 text-sm font-medium">
+                <HomeIcon className="h-4 w-4" />
+                Dashboard
               </Link>
-              <Link href="/marketplace">
-                <a className="flex items-center gap-2 text-sm font-medium">
-                  <ShoppingBagIcon className="h-4 w-4" />
-                  Marketplace
-                </a>
+              <Link href="/marketplace" className="flex items-center gap-2 text-sm font-medium">
+                <ShoppingBagIcon className="h-4 w-4" />
+                Marketplace
               </Link>
-              <Link href="/programs">
-                <a className="flex items-center gap-2 text-sm font-medium">
-                  <LayoutDashboardIcon className="h-4 w-4" />
-                  Programs
-                </a>
+              <Link href="/programs" className="flex items-center gap-2 text-sm font-medium">
+                <LayoutDashboardIcon className="h-4 w-4" />
+                Programs
               </Link>
-              <Link href="/meal-log">
-                <a className="flex items-center gap-2 text-sm font-medium">
-                  <UtensilsIcon className="h-4 w-4" />
-                  Meal Log
-                </a>
+              <Link href="/meal-log" className="flex items-center gap-2 text-sm font-medium">
+                <UtensilsIcon className="h-4 w-4" />
+                Meal Log
               </Link>
             </div>
           </div>
