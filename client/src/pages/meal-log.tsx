@@ -35,6 +35,7 @@ export default function MealLogPage() {
     data: { items: [{ name: "", portion: "", calories: 0 }] },
   });
 
+  // Move hook calls to the top level
   const { data: mealLogs, isLoading: isLoadingMeals } = useQuery<MealLog[]>({
     queryKey: ["/api/meals"],
   });
@@ -90,10 +91,10 @@ export default function MealLogPage() {
   const updateFoodItem = (index: number, field: string, value: string | number) => {
     const newItems = [...mealData.data.items];
     newItems[index] = { ...newItems[index], [field]: value };
-    
+
     // Calculate total calories
     const totalCalories = newItems.reduce((sum, item) => sum + (Number(item.calories) || 0), 0);
-    
+
     setMealData(prev => ({
       ...prev,
       calories: totalCalories,
@@ -237,7 +238,7 @@ export default function MealLogPage() {
                   >
                     <div>
                       <p className="font-medium">
-                        {new Date(log.date).toLocaleDateString()}
+                        {new Date(log.date!).toLocaleDateString()}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {log.calories} calories | {log.protein}g protein
