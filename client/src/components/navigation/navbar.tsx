@@ -18,7 +18,7 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/">
-              <a className="text-xl font-bold text-primary">FitCoach</a>
+              <a className="text-xl font-bold text-primary">Titan Fitness</a>
             </Link>
 
             <div className="flex gap-4">

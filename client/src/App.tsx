@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
+import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Marketplace from "@/pages/marketplace";
 import Programs from "@/pages/programs";
@@ -24,7 +25,12 @@ function Router() {
   }
 
   if (!user) {
-    return <AuthPage />;
+    return (
+      <Switch>
+        <Route path="/landing" component={Landing} />
+        <Route component={AuthPage} />
+      </Switch>
+    );
   }
 
   return (

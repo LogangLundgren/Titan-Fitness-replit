@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 import {
   Select,
   SelectContent,
@@ -47,65 +48,79 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md mx-4">
-        <CardHeader>
-          <CardTitle className="text-center text-2xl font-bold">
-            {isLogin ? "Welcome Back" : "Create Account"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            {!isLogin && (
+    <div className="min-h-screen bg-[#0F1521] text-white">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-2xl font-bold">Titan Fitness</h1>
+          <Link href="/landing">
+            <Button variant="ghost" className="text-white hover:text-[#00BAA1]">
+              Back to Home
+            </Button>
+          </Link>
+        </div>
+
+        <Card className="w-full max-w-md mx-auto bg-[#1A2332] border-[#2A3343] text-white">
+          <CardHeader>
+            <CardTitle className="text-center text-2xl font-bold">
+              {isLogin ? "Welcome Back" : "Create Account"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="accountType">Account Type</Label>
-                <Select
-                  value={accountType}
-                  onValueChange={(value: "client" | "coach") => setAccountType(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select account type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="client">Client</SelectItem>
-                    <SelectItem value="coach">Coach</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  className="bg-[#2A3343] border-[#3A4353]"
+                />
               </div>
-            )}
-            <Button type="submit" className="w-full">
-              {isLogin ? "Sign In" : "Sign Up"}
-            </Button>
-          </form>
-          <div className="mt-4 text-center">
-            <Button
-              variant="link"
-              onClick={() => setIsLogin(!isLogin)}
-            >
-              {isLogin ? "Need an account? Sign up" : "Already have an account? Sign in"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="bg-[#2A3343] border-[#3A4353]"
+                />
+              </div>
+              {!isLogin && (
+                <div className="space-y-2">
+                  <Label htmlFor="accountType">Account Type</Label>
+                  <Select
+                    value={accountType}
+                    onValueChange={(value: "client" | "coach") => setAccountType(value)}
+                  >
+                    <SelectTrigger className="bg-[#2A3343] border-[#3A4353]">
+                      <SelectValue placeholder="Select account type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="client">Client</SelectItem>
+                      <SelectItem value="coach">Coach</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <Button type="submit" className="w-full bg-[#00BAA1] hover:bg-[#00A891]">
+                {isLogin ? "Sign In" : "Sign Up"}
+              </Button>
+            </form>
+            <div className="mt-4 text-center">
+              <Button
+                variant="link"
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-[#00BAA1]"
+              >
+                {isLogin ? "Need an account? Sign up" : "Already have an account? Sign in"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
