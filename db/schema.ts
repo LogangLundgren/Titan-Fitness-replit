@@ -76,6 +76,13 @@ export const clientProgramRelations = relations(clientPrograms, ({ one }) => ({
   }),
 }));
 
+export const betaSignups = pgTable("beta_signups", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  email: text("email").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type ClientProgram = typeof clientPrograms.$inferSelect;
@@ -84,3 +91,7 @@ export type MealLog = typeof mealLogs.$inferSelect;
 
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
+
+export type BetaSignup = typeof betaSignups.$inferSelect;
+export const insertBetaSignupSchema = createInsertSchema(betaSignups);
+export const selectBetaSignupSchema = createSelectSchema(betaSignups);

@@ -2,11 +2,36 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { programs, clientPrograms, workoutLogs, mealLogs } from "@db/schema";
+import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
+
+  // Beta signup endpoint
+  app.post("/api/beta-signup", async (req, res) => {
+    try {
+      const { fullName, email } = req.body;
+
+      if (!fullName || !email) {
+        return res.status(400).send("Full name and email are required");
+      }
+
+      const signup = await db.insert(betaSignups)
+        .values({
+          fullName,
+          email,
+        })
+        .returning();
+
+      res.json({
+        message: "Beta signup successful",
+        signup: signup[0],
+      });
+    } catch (error: any) {
+      res.status(500).send(error.message);
+    }
+  });
 
   // Programs routes
   app.get("/api/programs", async (req, res) => {
@@ -130,8 +155,8 @@ export function registerRoutes(app: Express): Server {
       })),
     };
 
-    res.json({ 
-      workouts, 
+    res.json({
+      workouts,
       meals,
       analytics: {
         workout: workoutTrends,
