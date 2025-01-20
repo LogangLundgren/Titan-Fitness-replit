@@ -35,24 +35,25 @@ export const programs = pgTable("programs", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const programExercises = pgTable("program_exercises", {
+export const routines = pgTable("routines", {
   id: serial("id").primaryKey(),
   programId: integer("program_id").references(() => programs.id),
+  name: text("name").notNull(),
+  dayOfWeek: integer("day_of_week").notNull(), // 0-6 for Sunday-Saturday
+  orderInCycle: integer("order_in_cycle").notNull(),
+  notes: text("notes"),
+});
+
+export const programExercises = pgTable("program_exercises", {
+  id: serial("id").primaryKey(),
+  routineId: integer("routine_id").references(() => routines.id),
   name: text("name").notNull(),
   description: text("description"),
   sets: integer("sets"),
   reps: text("reps"), // Can be "8-12" or "12,10,8"
   restTime: text("rest_time"),
   notes: text("notes"),
-  order: integer("order").notNull(),
-});
-
-export const programSchedule = pgTable("program_schedule", {
-  id: serial("id").primaryKey(),
-  programId: integer("program_id").references(() => programs.id),
-  dayOfWeek: integer("day_of_week").notNull(), // 0-6 for Sunday-Saturday
-  name: text("name").notNull(), // e.g., "Push Day", "Pull Day"
-  notes: text("notes"),
+  orderInRoutine: integer("order_in_routine").notNull(),
 });
 
 export const clientPrograms = pgTable("client_programs", {
@@ -68,7 +69,17 @@ export const workoutLogs = pgTable("workout_logs", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => users.id),
   programId: integer("program_id").references(() => programs.id),
-  data: json("data"), // Sets, reps, weights etc.
+  routineId: integer("routine_id").references(() => routines.id),
+  data: json("data").$type<{
+    exercises: Array<{
+      exerciseId: number;
+      sets: Array<{
+        weight: number;
+        reps: number;
+        notes?: string;
+      }>;
+    }>;
+  }>(),
   date: timestamp("date").defaultNow(),
 });
 
@@ -89,22 +100,22 @@ export const programRelations = relations(programs, ({ one, many }) => ({
     fields: [programs.coachId],
     references: [users.id],
   }),
+  routines: many(routines),
   clientPrograms: many(clientPrograms),
+}));
+
+export const routineRelations = relations(routines, ({ one, many }) => ({
+  program: one(programs, {
+    fields: [routines.programId],
+    references: [programs.id],
+  }),
   exercises: many(programExercises),
-  schedule: many(programSchedule),
 }));
 
 export const programExerciseRelations = relations(programExercises, ({ one }) => ({
-  program: one(programs, {
-    fields: [programExercises.programId],
-    references: [programs.id],
-  }),
-}));
-
-export const programScheduleRelations = relations(programSchedule, ({ one }) => ({
-  program: one(programs, {
-    fields: [programSchedule.programId],
-    references: [programs.id],
+  routine: one(routines, {
+    fields: [programExercises.routineId],
+    references: [routines.id],
   }),
 }));
 
@@ -126,6 +137,7 @@ export const clientProgramRelations = relations(clientPrograms, ({ one }) => ({
   }),
 }));
 
+
 export const betaSignups = pgTable("beta_signups", {
   id: serial("id").primaryKey(),
   fullName: text("full_name").notNull(),
@@ -135,8 +147,8 @@ export const betaSignups = pgTable("beta_signups", {
 
 export type User = typeof users.$inferSelect;
 export type Program = typeof programs.$inferSelect;
+export type Routine = typeof routines.$inferSelect;
 export type ProgramExercise = typeof programExercises.$inferSelect;
-export type ProgramSchedule = typeof programSchedule.$inferSelect;
 export type ClientProgram = typeof clientPrograms.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type MealLog = typeof mealLogs.$inferSelect;

@@ -1,0 +1,236 @@
+I'll provide a comprehensive documentation of the program functionality from the coach's perspective, focusing on meal and lifting program creation.
+
+Coach Program Management Documentation
+1. Program Creation Flow
+Initial Program Creation
+From the Programs page (/programs), coaches see a "New Program" button in the top right
+Clicking opens a modal dialog with CreateProgramForm containing:
+Program Type selection (radio buttons):
+Pre-made Lifting Plan
+Pre-made Diet Plan
+Posing Coaching
+1-on-1 Coaching
+Basic program details:
+Name field
+Description textarea
+Price input
+"Make Publicly Available" checkbox for marketplace visibility
+Database Structure
+Programs are stored in the programs table with:
+id: UUID
+name: text
+description: text (nullable)
+program_type: enum ('lifting_plan', 'diet_plan', 'posing_plan', 'full_coaching_plan')
+price: numeric
+marketplace_visible: boolean
+owner_id: UUID (references profiles.id)
+Timestamps: created_at, updated_at
+2. Lifting Program Creation
+Program Builder Interface
+After creating a lifting plan, redirects to /program-builder/{programId}
+Interface shows:
+Program name and description at top
+"Add Routine" button for coaches
+Grid layout of routine cards
+Routine Creation
+"Add Routine" opens modal with:
+Routine name input
+Order in cycle input (numeric)
+Each routine card displays:
+Routine name
+Day number (order_in_cycle)
+List of exercises
+"Add Exercise" button
+Exercise Management
+"Add Exercise" opens a two-step process:
+Exercise selector with search and "New" button
+Exercise configuration form with:
+Sets input
+Reps per set input
+Optional notes field
+Exercises can be removed via delete button
+Exercise order is maintained in database
+Database Tables for Lifting Plans
+routines table:
+id: UUID
+program_id: UUID (references programs.id)
+name: text
+order_in_cycle: integer
+routine_exercises table:
+id: UUID
+routine_id: UUID (references routines.id)
+exercise_id: UUID (references exercises.id)
+order_in_routine: integer
+sets: integer
+reps_per_set: integer
+notes: text (nullable)
+3. Meal Program Creation
+Program Builder Interface
+After creating a diet plan, redirects to /program-builder/{programId}
+Interface shows:
+Program name and description at top
+"Add Meal" button for coaches
+Grid layout of meal cards
+Meal Creation
+"Add Meal" opens modal with:
+Basic Meal Information:
+Meal name input
+Meal number (order_in_day)
+Target calories input
+Notes textarea
+Macro Targets:
+Protein (g)
+Carbs (g)
+Fats (g)
+Meal Card Display
+Each meal card shows:
+
+Header with:
+Meal name
+Meal number
+Edit button
+Content including:
+Target calories
+Macro breakdown (protein/carbs/fats)
+List of assigned foods
+Notes section
+Database Tables for Meal Plans
+meals table:
+
+id: UUID
+program_id: UUID (references programs.id)
+name: text
+order_in_day: integer
+target_calories: integer (nullable)
+target_protein: numeric (nullable)
+target_carbs: numeric (nullable)
+target_fats: numeric (nullable)
+notes: text (nullable)
+meal_foods table:
+
+id: UUID
+meal_id: UUID (references meals.id)
+food_id: UUID (references foods.id)
+servings: numeric
+unit: enum (servings, grams, ounces, etc.)
+notes: text (nullable)
+4. Program Customization
+Client Assignment
+When a client is assigned to a program:
+Entry created in program_clients table
+Optional: Program can be customized for the client
+Customization Flow
+Original program is cloned via get_or_create_program_customization function
+Creates new program with "(Customized for Client)" suffix
+Copies all routines/meals and their associated data
+Links via client_program_customizations table
+Database Tables for Customization
+program_clients table:
+
+id: UUID
+program_id: UUID (references programs.id)
+client_id: UUID (references clients.id)
+status: text (default: 'active')
+client_program_customizations table:
+
+id: UUID
+program_client_id: UUID (references program_clients.id)
+original_program_id: UUID (references programs.id)
+customized_program_id: UUID (references programs.id)
+5. Security and Access Control
+Row Level Security (RLS) Policies
+Programs:
+Coaches can only manage their own programs
+Programs are viewable by owner or if marketplace_visible is true
+Routines/Meals:
+Coaches can only manage routines/meals in their programs
+Clients can view routines/meals from assigned programs
+User Roles
+Stored in profiles table:
+account_type: text (default: 'bodybuilder')
+Coaches identified by account_type = 'coach'
+6. Data Flow and State Management
+React Query Implementation
+Programs list:
+
+const { data: programs } = useQuery({
+  queryKey: ["programs"],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from("programs")
+      .select("*")
+      .eq("owner_id", user.id);
+    return data;
+  }
+});
+Program details with related data:
+
+const { data: program } = useQuery({
+  queryKey: ["program", programId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from("programs")
+      .select(`
+        *,
+        routines (
+          *,
+          routine_exercises (
+            *,
+            exercise:exercises (*)
+          )
+        ),
+        meals (
+          *,
+          meal_foods (
+            *,
+            food:foods (*)
+          )
+        )
+      `)
+      .eq("id", programId)
+      .single();
+    return data;
+  }
+});
+7. UI Components Hierarchy
+Programs Page
+└── ProgramList
+    └── ProgramCard
+        └── ProgramDialog
+            └── CreateProgramForm
+
+ProgramBuilder Page
+├── Program Info Header
+└── Based on program_type:
+    ├── Lifting Plan View
+    │   └── RoutineList
+    │       └── RoutineCard
+    │           └── ExerciseSelector
+    │               └── RoutineExerciseForm
+    └── Diet Plan View
+        └── MealList
+            └── MealCard
+                └── CreateMealForm
+8. Error Handling and Validation
+Form Validation:
+
+Required fields: name, program_type
+Numeric validation: price, sets, reps, calories, macros
+Order validation: order_in_cycle, order_in_day must be positive integers
+Error States:
+
+Loading states shown during data fetching
+Error messages displayed via toast notifications
+Fallback UI for failed data loads
+9. Performance Considerations
+Query Optimization:
+
+Nested selects for related data
+Proper indexing on foreign key columns
+Efficient joins in Supabase queries
+UI Performance:
+
+Pagination for large lists
+Optimistic updates for better UX
+Proper React Query cache management
+This documentation provides a comprehensive overview of the program management functionality from the coach's perspective, covering both lifting and meal programs. The system is designed to be flexible, secure, and maintainable while providing a smooth user experience for program creation and management.
