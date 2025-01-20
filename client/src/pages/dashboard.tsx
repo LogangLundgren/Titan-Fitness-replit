@@ -1,33 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
-import { StatsCard } from "@/components/dashboard/stats-card";
-import { WorkoutAnalytics } from "@/components/analytics/workout-analytics";
-import { NutritionAnalytics } from "@/components/analytics/nutrition-analytics";
-import { Loader2, Activity, Dumbbell, Apple } from "lucide-react";
-
-type ProgressData = {
-  workouts: Array<any>;
-  meals: Array<any>;
-  analytics: {
-    workout: {
-      totalWorkouts: number;
-      averageVolume: number;
-      lastWeekVolume: number;
-    };
-    nutrition: {
-      averageCalories: number;
-      averageProtein: number;
-      caloriesTrend: Array<{
-        date: string;
-        calories: number;
-      }>;
-    };
-  };
-};
+import { useUser } from "@/hooks/use-user";
+import { CoachDashboard } from "@/components/dashboard/coach-dashboard";
+import { ClientDashboard } from "@/components/dashboard/client-dashboard";
+import { Loader2 } from "lucide-react";
 
 export default function Dashboard() {
-  const { data, isLoading } = useQuery<ProgressData>({
-    queryKey: ["/api/progress"],
-  });
+  const { user, isLoading } = useUser();
 
   if (isLoading) {
     return (
@@ -37,39 +14,9 @@ export default function Dashboard() {
     );
   }
 
-  return (
-    <div className="space-y-8">
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatsCard
-          title="Total Workouts"
-          value={data?.analytics.workout.totalWorkouts || 0}
-          icon={Dumbbell}
-          description="Lifetime workouts completed"
-        />
-        <StatsCard
-          title="Weekly Volume"
-          value={Math.round(data?.analytics.workout.lastWeekVolume || 0)}
-          icon={Activity}
-          description="Total volume this week"
-        />
-        <StatsCard
-          title="Avg. Daily Calories"
-          value={Math.round(data?.analytics.nutrition.averageCalories || 0)}
-          icon={Apple}
-          description="Based on last 7 days"
-        />
-      </div>
+  if (!user) {
+    return null;
+  }
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <WorkoutAnalytics
-          workouts={data?.workouts || []}
-          isLoading={isLoading}
-        />
-        <NutritionAnalytics
-          meals={data?.meals || []}
-          isLoading={isLoading}
-        />
-      </div>
-    </div>
-  );
+  return user.accountType === "coach" ? <CoachDashboard /> : <ClientDashboard />;
 }

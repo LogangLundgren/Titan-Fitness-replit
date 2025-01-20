@@ -2,11 +2,104 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups } from "@db/schema";
-import { eq, and } from "drizzle-orm";
+import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups, users } from "@db/schema";
+import { eq, and, desc } from "drizzle-orm";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
+
+  // Coach dashboard data
+  app.get("/api/coach/dashboard", async (req, res) => {
+    if (!req.user || req.user.accountType !== "coach") {
+      return res.status(403).send("Only coaches can access this endpoint");
+    }
+
+    try {
+      // Get all clients enrolled in this coach's programs
+      const clientsData = await db.query.clientPrograms.findMany({
+        where: eq(clientPrograms.programId, req.user.id),
+        with: {
+          client: true,
+          program: true
+        }
+      });
+
+      // Get workout and meal logs for each client
+      const clientProgress = await Promise.all(
+        clientsData.map(async ({ client }) => {
+          const [workouts, lastActive] = await Promise.all([
+            db.query.workoutLogs.findMany({
+              where: eq(workoutLogs.clientId, client.id),
+              orderBy: [desc(workoutLogs.date)],
+              limit: 1
+            }),
+            db.query.workoutLogs.findMany({
+              where: eq(workoutLogs.clientId, client.id),
+              orderBy: [desc(workoutLogs.date)],
+              limit: 1
+            })
+          ]);
+
+          return {
+            id: client.id,
+            username: client.username,
+            progress: {
+              totalWorkouts: workouts.length,
+              lastActive: lastActive[0]?.date || new Date().toISOString(),
+              programCompletion: 0 // To be calculated based on program structure
+            }
+          };
+        })
+      );
+
+      res.json({
+        clients: clientProgress,
+        stats: {
+          totalClients: clientProgress.length,
+          activePrograms: clientsData.length,
+          messageCount: 0 // To be implemented with messaging system
+        }
+      });
+    } catch (error: any) {
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Client dashboard data
+  app.get("/api/client/dashboard", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const [workouts, meals] = await Promise.all([
+        db.query.workoutLogs.findMany({
+          where: eq(workoutLogs.clientId, req.user.id),
+          orderBy: [desc(workoutLogs.date)],
+          limit: 10
+        }),
+        db.query.mealLogs.findMany({
+          where: eq(mealLogs.clientId, req.user.id),
+          orderBy: [desc(mealLogs.date)],
+          limit: 10
+        })
+      ]);
+
+      const stats = {
+        totalWorkouts: workouts.length,
+        averageCalories: meals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / (meals.length || 1),
+        programProgress: 0 // To be calculated based on program structure
+      };
+
+      res.json({
+        workouts,
+        meals,
+        stats
+      });
+    } catch (error: any) {
+      res.status(500).send(error.message);
+    }
+  });
 
   // Beta signup endpoint
   app.post("/api/beta-signup", async (req, res) => {
