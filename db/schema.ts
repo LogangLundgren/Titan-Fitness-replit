@@ -30,8 +30,29 @@ export const programs = pgTable("programs", {
   type: text("type").notNull(), // "lifting", "diet", "posing", "coaching"
   price: real("price").default(0),
   coachId: integer("coach_id").references(() => users.id),
-  data: json("data"), // Exercises, meal plans etc.
+  isPublic: boolean("is_public").default(false),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const programExercises = pgTable("program_exercises", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").references(() => programs.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  sets: integer("sets"),
+  reps: text("reps"), // Can be "8-12" or "12,10,8"
+  restTime: text("rest_time"),
+  notes: text("notes"),
+  order: integer("order").notNull(),
+});
+
+export const programSchedule = pgTable("program_schedule", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").references(() => programs.id),
+  dayOfWeek: integer("day_of_week").notNull(), // 0-6 for Sunday-Saturday
+  name: text("name").notNull(), // e.g., "Push Day", "Pull Day"
+  notes: text("notes"),
 });
 
 export const clientPrograms = pgTable("client_programs", {
@@ -40,6 +61,7 @@ export const clientPrograms = pgTable("client_programs", {
   programId: integer("program_id").references(() => programs.id),
   active: boolean("active").default(true),
   startDate: timestamp("start_date").defaultNow(),
+  completedWorkouts: integer("completed_workouts").default(0),
 });
 
 export const workoutLogs = pgTable("workout_logs", {
@@ -68,6 +90,22 @@ export const programRelations = relations(programs, ({ one, many }) => ({
     references: [users.id],
   }),
   clientPrograms: many(clientPrograms),
+  exercises: many(programExercises),
+  schedule: many(programSchedule),
+}));
+
+export const programExerciseRelations = relations(programExercises, ({ one }) => ({
+  program: one(programs, {
+    fields: [programExercises.programId],
+    references: [programs.id],
+  }),
+}));
+
+export const programScheduleRelations = relations(programSchedule, ({ one }) => ({
+  program: one(programs, {
+    fields: [programSchedule.programId],
+    references: [programs.id],
+  }),
 }));
 
 export const userRelations = relations(users, ({ many }) => ({
@@ -97,6 +135,8 @@ export const betaSignups = pgTable("beta_signups", {
 
 export type User = typeof users.$inferSelect;
 export type Program = typeof programs.$inferSelect;
+export type ProgramExercise = typeof programExercises.$inferSelect;
+export type ProgramSchedule = typeof programSchedule.$inferSelect;
 export type ClientProgram = typeof clientPrograms.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type MealLog = typeof mealLogs.$inferSelect;

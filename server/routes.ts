@@ -4,6 +4,8 @@ import { setupAuth } from "./auth";
 import { db } from "@db";
 import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups, users } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { programExercises, programSchedule } from "@db/schema";
+import { desc, sql } from "drizzle-orm";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -128,12 +130,21 @@ export function registerRoutes(app: Express): Server {
 
   // Programs routes
   app.get("/api/programs", async (req, res) => {
-    const allPrograms = await db.query.programs.findMany({
-      with: {
-        coach: true
-      }
-    });
-    res.json(allPrograms);
+    try {
+      const allPrograms = await db.query.programs.findMany({
+        with: {
+          coach: true,
+          exercises: {
+            orderBy: programExercises.order,
+          },
+          schedule: true,
+        }
+      });
+      res.json(allPrograms);
+    } catch (error: any) {
+      console.error("Error fetching programs:", error);
+      res.status(500).send(error.message);
+    }
   });
 
   app.post("/api/programs", async (req, res) => {
@@ -141,14 +152,57 @@ export function registerRoutes(app: Express): Server {
       return res.status(403).send("Only coaches can create programs");
     }
 
-    const program = await db.insert(programs)
-      .values({
-        ...req.body,
-        coachId: req.user.id
-      })
-      .returning();
+    try {
+      const { exercises, schedule, ...programData } = req.body;
 
-    res.json(program[0]);
+      // Create program first
+      const [program] = await db.insert(programs)
+        .values({
+          ...programData,
+          coachId: req.user.id,
+        })
+        .returning();
+
+      if (exercises?.length > 0) {
+        // Add exercises with proper order
+        await db.insert(programExercises)
+          .values(
+            exercises.map((exercise: any, index: number) => ({
+              ...exercise,
+              programId: program.id,
+              order: index + 1,
+            }))
+          );
+      }
+
+      if (schedule?.length > 0) {
+        // Add schedule
+        await db.insert(programSchedule)
+          .values(
+            schedule.map((day: any) => ({
+              ...day,
+              programId: program.id,
+            }))
+          );
+      }
+
+      // Fetch the complete program with relations
+      const [completeProgram] = await db.query.programs.findMany({
+        where: eq(programs.id, program.id),
+        with: {
+          exercises: {
+            orderBy: programExercises.order,
+          },
+          schedule: true,
+        },
+        limit: 1,
+      });
+
+      res.json(completeProgram);
+    } catch (error: any) {
+      console.error("Error creating program:", error);
+      res.status(500).send(error.message);
+    }
   });
 
   // Client program enrollment

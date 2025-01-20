@@ -1,9 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { ProgramCard } from "@/components/programs/program-card";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/use-user";
-import type { Program, ClientProgram } from "@db/schema";
+import type { Program } from "@db/schema";
 import {
   Dialog,
   DialogContent,
@@ -23,16 +23,38 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+interface Exercise {
+  name: string;
+  description: string;
+  sets: number;
+  reps: string;
+  restTime: string;
+  notes: string;
+}
+
+interface ScheduleDay {
+  dayOfWeek: number;
+  name: string;
+  notes: string;
+}
 
 export default function Programs() {
   const { user } = useUser();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
+  const [currentTab, setCurrentTab] = useState("details");
   const [newProgram, setNewProgram] = useState({
     name: "",
     description: "",
     type: "lifting",
     price: 0,
+    isPublic: false,
+    exercises: [] as Exercise[],
+    schedule: [] as ScheduleDay[],
   });
 
   const { data: programs, isLoading } = useQuery<Program[]>({
@@ -43,6 +65,38 @@ export default function Programs() {
   const userPrograms = programs?.filter(p => 
     isCoach ? p.coachId === user.id : true
   );
+
+  const handleAddExercise = () => {
+    setNewProgram(prev => ({
+      ...prev,
+      exercises: [...prev.exercises, {
+        name: "",
+        description: "",
+        sets: 3,
+        reps: "",
+        restTime: "",
+        notes: "",
+      }],
+    }));
+  };
+
+  const handleRemoveExercise = (index: number) => {
+    setNewProgram(prev => ({
+      ...prev,
+      exercises: prev.exercises.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleAddScheduleDay = () => {
+    setNewProgram(prev => ({
+      ...prev,
+      schedule: [...prev.schedule, {
+        dayOfWeek: 0,
+        name: "",
+        notes: "",
+      }],
+    }));
+  };
 
   const handleCreateProgram = async () => {
     try {
@@ -59,6 +113,7 @@ export default function Programs() {
         throw new Error(await response.text());
       }
 
+      await queryClient.invalidateQueries({ queryKey: ["/api/programs"] });
       toast({
         title: "Success",
         description: "Program created successfully",
@@ -87,7 +142,7 @@ export default function Programs() {
         <h1 className="text-3xl font-bold tracking-tight">
           {isCoach ? "My Programs" : "Enrolled Programs"}
         </h1>
-        
+
         {isCoach && (
           <Dialog open={isCreating} onOpenChange={setIsCreating}>
             <DialogTrigger asChild>
@@ -96,62 +151,221 @@ export default function Programs() {
                 Create Program
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-3xl">
               <DialogHeader>
                 <DialogTitle>Create New Program</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Program Name</Label>
-                  <Input
-                    id="name"
-                    value={newProgram.name}
-                    onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={newProgram.description}
-                    onChange={(e) => setNewProgram({ ...newProgram, description: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Type</Label>
-                  <Select
-                    value={newProgram.type}
-                    onValueChange={(value) => setNewProgram({ ...newProgram, type: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="lifting">Lifting</SelectItem>
-                      <SelectItem value="diet">Diet</SelectItem>
-                      <SelectItem value="posing">Posing</SelectItem>
-                      <SelectItem value="coaching">Coaching</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="price">Price ($)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newProgram.price}
-                    onChange={(e) => setNewProgram({ ...newProgram, price: parseFloat(e.target.value) })}
-                  />
-                </div>
+              <ScrollArea className="max-h-[80vh]">
+                <Tabs value={currentTab} onValueChange={setCurrentTab}>
+                  <TabsList>
+                    <TabsTrigger value="details">Program Details</TabsTrigger>
+                    <TabsTrigger value="exercises">Exercises</TabsTrigger>
+                    <TabsTrigger value="schedule">Schedule</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="details" className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Program Name</Label>
+                      <Input
+                        id="name"
+                        value={newProgram.name}
+                        onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={newProgram.description}
+                        onChange={(e) => setNewProgram({ ...newProgram, description: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="type">Type</Label>
+                      <Select
+                        value={newProgram.type}
+                        onValueChange={(value) => setNewProgram({ ...newProgram, type: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="lifting">Lifting</SelectItem>
+                          <SelectItem value="diet">Diet</SelectItem>
+                          <SelectItem value="posing">Posing</SelectItem>
+                          <SelectItem value="coaching">Coaching</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Price ($)</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={newProgram.price}
+                        onChange={(e) => setNewProgram({ ...newProgram, price: parseFloat(e.target.value) })}
+                      />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="exercises" className="space-y-4 py-4">
+                    {newProgram.exercises.map((exercise, index) => (
+                      <div key={index} className="space-y-4 p-4 border rounded-lg relative">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-2 top-2"
+                          onClick={() => handleRemoveExercise(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <div className="space-y-2">
+                          <Label>Exercise Name</Label>
+                          <Input
+                            value={exercise.name}
+                            onChange={(e) => {
+                              const exercises = [...newProgram.exercises];
+                              exercises[index].name = e.target.value;
+                              setNewProgram({ ...newProgram, exercises });
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Description</Label>
+                          <Textarea
+                            value={exercise.description}
+                            onChange={(e) => {
+                              const exercises = [...newProgram.exercises];
+                              exercises[index].description = e.target.value;
+                              setNewProgram({ ...newProgram, exercises });
+                            }}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Sets</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={exercise.sets}
+                              onChange={(e) => {
+                                const exercises = [...newProgram.exercises];
+                                exercises[index].sets = parseInt(e.target.value);
+                                setNewProgram({ ...newProgram, exercises });
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Reps</Label>
+                            <Input
+                              placeholder="e.g., 8-12 or 12,10,8"
+                              value={exercise.reps}
+                              onChange={(e) => {
+                                const exercises = [...newProgram.exercises];
+                                exercises[index].reps = e.target.value;
+                                setNewProgram({ ...newProgram, exercises });
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Rest Time</Label>
+                          <Input
+                            placeholder="e.g., 60 seconds"
+                            value={exercise.restTime}
+                            onChange={(e) => {
+                              const exercises = [...newProgram.exercises];
+                              exercises[index].restTime = e.target.value;
+                              setNewProgram({ ...newProgram, exercises });
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Notes</Label>
+                          <Textarea
+                            value={exercise.notes}
+                            onChange={(e) => {
+                              const exercises = [...newProgram.exercises];
+                              exercises[index].notes = e.target.value;
+                              setNewProgram({ ...newProgram, exercises });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <Button onClick={handleAddExercise} className="w-full">
+                      Add Exercise
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="schedule" className="space-y-4 py-4">
+                    {newProgram.schedule.map((day, index) => (
+                      <div key={index} className="space-y-4 p-4 border rounded-lg">
+                        <div className="space-y-2">
+                          <Label>Day</Label>
+                          <Select
+                            value={day.dayOfWeek.toString()}
+                            onValueChange={(value) => {
+                              const schedule = [...newProgram.schedule];
+                              schedule[index].dayOfWeek = parseInt(value);
+                              setNewProgram({ ...newProgram, schedule });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select day" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0">Sunday</SelectItem>
+                              <SelectItem value="1">Monday</SelectItem>
+                              <SelectItem value="2">Tuesday</SelectItem>
+                              <SelectItem value="3">Wednesday</SelectItem>
+                              <SelectItem value="4">Thursday</SelectItem>
+                              <SelectItem value="5">Friday</SelectItem>
+                              <SelectItem value="6">Saturday</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Workout Name</Label>
+                          <Input
+                            placeholder="e.g., Push Day"
+                            value={day.name}
+                            onChange={(e) => {
+                              const schedule = [...newProgram.schedule];
+                              schedule[index].name = e.target.value;
+                              setNewProgram({ ...newProgram, schedule });
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Notes</Label>
+                          <Textarea
+                            value={day.notes}
+                            onChange={(e) => {
+                              const schedule = [...newProgram.schedule];
+                              schedule[index].notes = e.target.value;
+                              setNewProgram({ ...newProgram, schedule });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <Button onClick={handleAddScheduleDay} className="w-full">
+                      Add Schedule Day
+                    </Button>
+                  </TabsContent>
+                </Tabs>
+
                 <Button 
-                  className="w-full mt-4" 
+                  className="w-full mt-6" 
                   onClick={handleCreateProgram}
+                  disabled={!newProgram.name || !newProgram.type}
                 >
                   Create Program
                 </Button>
-              </div>
+              </ScrollArea>
             </DialogContent>
           </Dialog>
         )}
@@ -165,7 +379,7 @@ export default function Programs() {
             showManageButton={isCoach}
           />
         ))}
-        
+
         {userPrograms?.length === 0 && (
           <div className="col-span-full text-center py-12">
             <h3 className="text-lg font-medium">
