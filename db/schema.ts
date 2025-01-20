@@ -7,7 +7,19 @@ export const users = pgTable("users", {
   username: text("username").unique().notNull(),
   password: text("password").notNull(),
   accountType: text("account_type").notNull().default("client"),
+  fullName: text("full_name"),
+  email: text("email"),
   bio: text("bio"),
+  phoneNumber: text("phone_number"),
+  specialties: text("specialties"),
+  certifications: text("certifications"),
+  experience: text("experience"),
+  socialLinks: json("social_links").$type<{
+    instagram?: string;
+    twitter?: string;
+    website?: string;
+  }>(),
+  isPublicProfile: boolean("is_public_profile").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

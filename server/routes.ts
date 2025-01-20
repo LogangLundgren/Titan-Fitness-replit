@@ -258,6 +258,46 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
+  app.get("/api/profile", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const [profile] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, req.user.id))
+        .limit(1);
+
+      res.json(profile);
+    } catch (error: any) {
+      res.status(500).send(error.message);
+    }
+  });
+
+  app.post("/api/profile", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const [updatedProfile] = await db
+        .update(users)
+        .set({
+          ...req.body,
+          socialLinks: req.body.socialLinks ? JSON.parse(req.body.socialLinks) : undefined,
+        })
+        .where(eq(users.id, req.user.id))
+        .returning();
+
+      res.json(updatedProfile);
+    } catch (error: any) {
+      res.status(500).send(error.message);
+    }
+  });
+
+
   const httpServer = createServer(app);
   return httpServer;
 }

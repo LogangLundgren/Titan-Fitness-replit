@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import Marketplace from "@/pages/marketplace";
 import Programs from "@/pages/programs";
 import MealLog from "@/pages/meal-log";
+import Profile from "@/pages/profile";
 import { useUser } from "@/hooks/use-user";
 import { Loader2 } from "lucide-react";
 import { Navbar } from "@/components/navigation/navbar";
@@ -42,6 +43,7 @@ function Router() {
           <Route path="/marketplace" component={Marketplace} />
           <Route path="/programs" component={Programs} />
           <Route path="/meal-log" component={MealLog} />
+          <Route path="/profile" component={Profile} />
           <Route component={NotFound} />
         </Switch>
       </main>
