@@ -1,0 +1,62 @@
+Prompt: Coach-Side Program Creation
+Objective:
+Develop a comprehensive and user-friendly "Create Program" feature for coaches. The feature should allow coaches to create and customize workout programs for their clients. This process includes adding program details, scheduling workouts, and ensuring the program appears under "My Programs" after creation.
+
+Feature Requirements:
+User Interface (UI):
+Pop-Up Window:
+
+Include a scroll bar to improve user experience for long input forms.
+Use a clean and intuitive design with labeled fields.
+Fields for Program Details:
+
+Program Name: Text input for the name of the program.
+Description: Text area to describe the program’s purpose and goals.
+Schedule: A calendar or dropdown to select the days for each workout (e.g., Monday, Wednesday, Friday).
+Exercises:
+Multi-select dropdown or a dynamic input table to add exercises.
+Fields for the number of sets and reps for each exercise.
+Optional: Include a field for rest time between sets or intensity level (e.g., light, moderate, heavy).
+Price: Input field for setting the program price (if applicable).
+Buttons:
+
+Save: Save the program details and upload it to the database.
+Cancel: Discard changes and close the pop-up.
+Functionality:
+Program Creation:
+
+After filling out the details and clicking "Save," the program should:
+Validate all fields for completeness.
+Save the program to the database under the programs table.
+Link the program to the coach's profile in the profiles table.
+Generate a unique program_id.
+Adding Exercises:
+
+Allow coaches to dynamically add multiple exercises to a program.
+Store each exercise’s details (name, sets, reps, description) in a related program_exercises table.
+Program Visibility:
+
+Once a program is created, it should immediately appear under the "My Programs" section on the coach’s dashboard.
+Scheduling:
+
+Save the selected schedule in the database under a program_schedule table or as part of the program details.
+Error Handling:
+
+Display an error message if required fields are missing or invalid.
+Show a success message upon successful program creation.
+Preview Option (Optional for Later):
+
+Allow coaches to preview the program layout before saving.
+Database Schema Adjustments:
+Tables to Update/Create:
+programs: Add fields for name, description, price, schedule, and linked coach ID.
+program_exercises: Include program ID, exercise name, sets, reps, and optional description.
+program_schedule: Add fields for program ID, days of the week, and optional time slots.
+Actionable Steps:
+UI:
+Build a pop-up form for program creation with the above fields and scroll bar.
+Backend:
+Set up the API endpoints to handle saving programs, exercises, and schedules.
+Validate form input and save data to the database.
+Frontend:
+Update the "My Programs" page to dynamically fetch and display newly created programs.

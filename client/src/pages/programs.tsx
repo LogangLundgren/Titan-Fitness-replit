@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Edit } from "lucide-react";
 import { ProgramCard } from "@/components/programs/program-card";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/use-user";
@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { useLocation } from "wouter";
 
 interface Exercise {
   name: string;
@@ -37,7 +38,7 @@ interface Exercise {
 }
 
 interface WorkoutDay {
-  dayOfWeek: number;
+  dayOfWeek?: number;
   name: string;
   notes: string;
   exercises: Exercise[];
@@ -46,6 +47,7 @@ interface WorkoutDay {
 export default function Programs() {
   const { user } = useUser();
   const { toast } = useToast();
+  const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
   const [currentTab, setCurrentTab] = useState("details");
@@ -63,15 +65,14 @@ export default function Programs() {
   });
 
   const isCoach = user?.accountType === "coach";
-  const userPrograms = programs?.filter(p => 
-    isCoach ? p.coachId === user.id : true
+  const userPrograms = programs?.filter(p =>
+    isCoach ? p.coachId === user.id : p.clientId === user.id
   );
 
   const handleAddWorkoutDay = () => {
     setNewProgram(prev => ({
       ...prev,
       workoutDays: [...prev.workoutDays, {
-        dayOfWeek: prev.workoutDays.length,
         name: "",
         notes: "",
         exercises: [],
@@ -111,11 +112,10 @@ export default function Programs() {
 
   const handleCreateProgram = async () => {
     try {
-      // Transform workoutDays into the format expected by the API
       const exercises = newProgram.workoutDays.flatMap((day, dayIndex) =>
         day.exercises.map((exercise, exerciseIndex) => ({
           ...exercise,
-          order: dayIndex * 1000 + exerciseIndex, // This ensures exercises stay grouped by day
+          order: dayIndex * 1000 + exerciseIndex,
         }))
       );
 
@@ -161,6 +161,10 @@ export default function Programs() {
     }
   };
 
+  const handleManageProgram = (programId: number) => {
+    setLocation(`/programs/${programId}/manage`);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -184,11 +188,11 @@ export default function Programs() {
                 Create Program
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl">
+            <DialogContent className="max-w-3xl max-h-[90vh]">
               <DialogHeader>
                 <DialogTitle>Create New Program</DialogTitle>
               </DialogHeader>
-              <ScrollArea className="max-h-[80vh]">
+              <ScrollArea className="max-h-[80vh] px-1">
                 <Tabs value={currentTab} onValueChange={setCurrentTab}>
                   <TabsList>
                     <TabsTrigger value="details">Program Details</TabsTrigger>
@@ -268,17 +272,17 @@ export default function Programs() {
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label>Day of Week</Label>
+                              <Label>Day of Week (Optional)</Label>
                               <Select
-                                value={day.dayOfWeek.toString()}
+                                value={day.dayOfWeek?.toString()}
                                 onValueChange={(value) => {
                                   const workoutDays = [...newProgram.workoutDays];
-                                  workoutDays[dayIndex].dayOfWeek = parseInt(value);
+                                  workoutDays[dayIndex].dayOfWeek = value ? parseInt(value) : undefined;
                                   setNewProgram({ ...newProgram, workoutDays });
                                 }}
                               >
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select day" />
+                                  <SelectValue placeholder="Select day (optional)" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="0">Sunday</SelectItem>
@@ -413,8 +417,8 @@ export default function Programs() {
                   </TabsContent>
                 </Tabs>
 
-                <Button 
-                  className="w-full mt-6" 
+                <Button
+                  className="w-full mt-6"
                   onClick={handleCreateProgram}
                   disabled={!newProgram.name || !newProgram.type || newProgram.workoutDays.length === 0}
                 >
@@ -432,6 +436,7 @@ export default function Programs() {
             key={program.id}
             program={program}
             showManageButton={isCoach}
+            onManage={() => handleManageProgram(program.id)}
           />
         ))}
 
@@ -441,7 +446,7 @@ export default function Programs() {
               {isCoach ? "No programs created" : "No programs enrolled"}
             </h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {isCoach 
+              {isCoach
                 ? "Create your first program to get started!"
                 : "Enroll in a program from the marketplace to get started!"
               }
