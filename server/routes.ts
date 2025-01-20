@@ -81,26 +81,63 @@ export function registerRoutes(app: Express): Server {
     res.json(log[0]);
   });
 
-  // Get user's progress data
+  // Enhanced progress data with analytics
   app.get("/api/progress", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
     }
 
-    const [workouts, meals] = await Promise.all([
+    const [workouts, meals, workoutStats, nutritionStats] = await Promise.all([
+      // Recent workouts
       db.query.workoutLogs.findMany({
         where: eq(workoutLogs.clientId, req.user.id),
         orderBy: (workoutLogs, { desc }) => [desc(workoutLogs.date)],
         limit: 10
       }),
+      // Recent meals
       db.query.mealLogs.findMany({
         where: eq(mealLogs.clientId, req.user.id),
         orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
         limit: 10
+      }),
+      // Workout statistics
+      db.query.workoutLogs.findMany({
+        where: eq(workoutLogs.clientId, req.user.id),
+        orderBy: (workoutLogs, { desc }) => [desc(workoutLogs.date)],
+        limit: 30 // Last 30 workouts for trends
+      }),
+      // Nutrition statistics
+      db.query.mealLogs.findMany({
+        where: eq(mealLogs.clientId, req.user.id),
+        orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
+        limit: 30 // Last 30 days of nutrition data
       })
     ]);
 
-    res.json({ workouts, meals });
+    // Calculate averages and trends
+    const workoutTrends = {
+      totalWorkouts: workoutStats.length,
+      averageVolume: workoutStats.reduce((acc, w) => acc + (w.data?.volume || 0), 0) / workoutStats.length || 0,
+      lastWeekVolume: workoutStats.slice(0, 7).reduce((acc, w) => acc + (w.data?.volume || 0), 0),
+    };
+
+    const nutritionTrends = {
+      averageCalories: meals.reduce((acc, m) => acc + (m.calories || 0), 0) / meals.length || 0,
+      averageProtein: meals.reduce((acc, m) => acc + (m.protein || 0), 0) / meals.length || 0,
+      caloriesTrend: nutritionStats.map(m => ({
+        date: m.date,
+        calories: m.calories,
+      })),
+    };
+
+    res.json({ 
+      workouts, 
+      meals,
+      analytics: {
+        workout: workoutTrends,
+        nutrition: nutritionTrends,
+      }
+    });
   });
 
   const httpServer = createServer(app);
