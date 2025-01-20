@@ -25,6 +25,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 interface Exercise {
   name: string;
@@ -35,10 +36,11 @@ interface Exercise {
   notes: string;
 }
 
-interface ScheduleDay {
+interface WorkoutDay {
   dayOfWeek: number;
   name: string;
   notes: string;
+  exercises: Exercise[];
 }
 
 export default function Programs() {
@@ -53,8 +55,7 @@ export default function Programs() {
     type: "lifting",
     price: 0,
     isPublic: false,
-    exercises: [] as Exercise[],
-    schedule: [] as ScheduleDay[],
+    workoutDays: [] as WorkoutDay[],
   });
 
   const { data: programs, isLoading } = useQuery<Program[]>({
@@ -66,46 +67,78 @@ export default function Programs() {
     isCoach ? p.coachId === user.id : true
   );
 
-  const handleAddExercise = () => {
+  const handleAddWorkoutDay = () => {
     setNewProgram(prev => ({
       ...prev,
-      exercises: [...prev.exercises, {
+      workoutDays: [...prev.workoutDays, {
+        dayOfWeek: prev.workoutDays.length,
+        name: "",
+        notes: "",
+        exercises: [],
+      }],
+    }));
+  };
+
+  const handleAddExercise = (dayIndex: number) => {
+    setNewProgram(prev => {
+      const workoutDays = [...prev.workoutDays];
+      workoutDays[dayIndex].exercises.push({
         name: "",
         description: "",
         sets: 3,
         reps: "",
         restTime: "",
         notes: "",
-      }],
-    }));
+      });
+      return { ...prev, workoutDays };
+    });
   };
 
-  const handleRemoveExercise = (index: number) => {
-    setNewProgram(prev => ({
-      ...prev,
-      exercises: prev.exercises.filter((_, i) => i !== index),
-    }));
+  const handleRemoveExercise = (dayIndex: number, exerciseIndex: number) => {
+    setNewProgram(prev => {
+      const workoutDays = [...prev.workoutDays];
+      workoutDays[dayIndex].exercises.splice(exerciseIndex, 1);
+      return { ...prev, workoutDays };
+    });
   };
 
-  const handleAddScheduleDay = () => {
+  const handleRemoveWorkoutDay = (dayIndex: number) => {
     setNewProgram(prev => ({
       ...prev,
-      schedule: [...prev.schedule, {
-        dayOfWeek: 0,
-        name: "",
-        notes: "",
-      }],
+      workoutDays: prev.workoutDays.filter((_, i) => i !== dayIndex),
     }));
   };
 
   const handleCreateProgram = async () => {
     try {
+      // Transform workoutDays into the format expected by the API
+      const exercises = newProgram.workoutDays.flatMap((day, dayIndex) =>
+        day.exercises.map((exercise, exerciseIndex) => ({
+          ...exercise,
+          order: dayIndex * 1000 + exerciseIndex, // This ensures exercises stay grouped by day
+        }))
+      );
+
+      const schedule = newProgram.workoutDays.map(day => ({
+        dayOfWeek: day.dayOfWeek,
+        name: day.name,
+        notes: day.notes,
+      }));
+
       const response = await fetch("/api/programs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(newProgram),
+        body: JSON.stringify({
+          name: newProgram.name,
+          description: newProgram.description,
+          type: newProgram.type,
+          price: newProgram.price,
+          isPublic: newProgram.isPublic,
+          exercises,
+          schedule,
+        }),
         credentials: "include",
       });
 
@@ -159,8 +192,7 @@ export default function Programs() {
                 <Tabs value={currentTab} onValueChange={setCurrentTab}>
                   <TabsList>
                     <TabsTrigger value="details">Program Details</TabsTrigger>
-                    <TabsTrigger value="exercises">Exercises</TabsTrigger>
-                    <TabsTrigger value="schedule">Schedule</TabsTrigger>
+                    <TabsTrigger value="workouts">Workout Days</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="details" className="space-y-4 py-4">
@@ -210,150 +242,173 @@ export default function Programs() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="exercises" className="space-y-4 py-4">
-                    {newProgram.exercises.map((exercise, index) => (
-                      <div key={index} className="space-y-4 p-4 border rounded-lg relative">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-2 top-2"
-                          onClick={() => handleRemoveExercise(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <div className="space-y-2">
-                          <Label>Exercise Name</Label>
-                          <Input
-                            value={exercise.name}
-                            onChange={(e) => {
-                              const exercises = [...newProgram.exercises];
-                              exercises[index].name = e.target.value;
-                              setNewProgram({ ...newProgram, exercises });
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Description</Label>
-                          <Textarea
-                            value={exercise.description}
-                            onChange={(e) => {
-                              const exercises = [...newProgram.exercises];
-                              exercises[index].description = e.target.value;
-                              setNewProgram({ ...newProgram, exercises });
-                            }}
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Sets</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={exercise.sets}
-                              onChange={(e) => {
-                                const exercises = [...newProgram.exercises];
-                                exercises[index].sets = parseInt(e.target.value);
-                                setNewProgram({ ...newProgram, exercises });
-                              }}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Reps</Label>
-                            <Input
-                              placeholder="e.g., 8-12 or 12,10,8"
-                              value={exercise.reps}
-                              onChange={(e) => {
-                                const exercises = [...newProgram.exercises];
-                                exercises[index].reps = e.target.value;
-                                setNewProgram({ ...newProgram, exercises });
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Rest Time</Label>
-                          <Input
-                            placeholder="e.g., 60 seconds"
-                            value={exercise.restTime}
-                            onChange={(e) => {
-                              const exercises = [...newProgram.exercises];
-                              exercises[index].restTime = e.target.value;
-                              setNewProgram({ ...newProgram, exercises });
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Notes</Label>
-                          <Textarea
-                            value={exercise.notes}
-                            onChange={(e) => {
-                              const exercises = [...newProgram.exercises];
-                              exercises[index].notes = e.target.value;
-                              setNewProgram({ ...newProgram, exercises });
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    <Button onClick={handleAddExercise} className="w-full">
-                      Add Exercise
-                    </Button>
-                  </TabsContent>
-
-                  <TabsContent value="schedule" className="space-y-4 py-4">
-                    {newProgram.schedule.map((day, index) => (
-                      <div key={index} className="space-y-4 p-4 border rounded-lg">
-                        <div className="space-y-2">
-                          <Label>Day</Label>
-                          <Select
-                            value={day.dayOfWeek.toString()}
-                            onValueChange={(value) => {
-                              const schedule = [...newProgram.schedule];
-                              schedule[index].dayOfWeek = parseInt(value);
-                              setNewProgram({ ...newProgram, schedule });
-                            }}
+                  <TabsContent value="workouts" className="space-y-4 py-4">
+                    <div className="space-y-4">
+                      {newProgram.workoutDays.map((day, dayIndex) => (
+                        <Card key={dayIndex} className="relative">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-2 top-2"
+                            onClick={() => handleRemoveWorkoutDay(dayIndex)}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select day" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="0">Sunday</SelectItem>
-                              <SelectItem value="1">Monday</SelectItem>
-                              <SelectItem value="2">Tuesday</SelectItem>
-                              <SelectItem value="3">Wednesday</SelectItem>
-                              <SelectItem value="4">Thursday</SelectItem>
-                              <SelectItem value="5">Friday</SelectItem>
-                              <SelectItem value="6">Saturday</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Workout Name</Label>
-                          <Input
-                            placeholder="e.g., Push Day"
-                            value={day.name}
-                            onChange={(e) => {
-                              const schedule = [...newProgram.schedule];
-                              schedule[index].name = e.target.value;
-                              setNewProgram({ ...newProgram, schedule });
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Notes</Label>
-                          <Textarea
-                            value={day.notes}
-                            onChange={(e) => {
-                              const schedule = [...newProgram.schedule];
-                              schedule[index].notes = e.target.value;
-                              setNewProgram({ ...newProgram, schedule });
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    <Button onClick={handleAddScheduleDay} className="w-full">
-                      Add Schedule Day
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <CardHeader>
+                            <div className="space-y-2">
+                              <Label>Workout Day Name</Label>
+                              <Input
+                                placeholder="e.g., Push Day, Pull Day"
+                                value={day.name}
+                                onChange={(e) => {
+                                  const workoutDays = [...newProgram.workoutDays];
+                                  workoutDays[dayIndex].name = e.target.value;
+                                  setNewProgram({ ...newProgram, workoutDays });
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Day of Week</Label>
+                              <Select
+                                value={day.dayOfWeek.toString()}
+                                onValueChange={(value) => {
+                                  const workoutDays = [...newProgram.workoutDays];
+                                  workoutDays[dayIndex].dayOfWeek = parseInt(value);
+                                  setNewProgram({ ...newProgram, workoutDays });
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select day" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="0">Sunday</SelectItem>
+                                  <SelectItem value="1">Monday</SelectItem>
+                                  <SelectItem value="2">Tuesday</SelectItem>
+                                  <SelectItem value="3">Wednesday</SelectItem>
+                                  <SelectItem value="4">Thursday</SelectItem>
+                                  <SelectItem value="5">Friday</SelectItem>
+                                  <SelectItem value="6">Saturday</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Day Notes</Label>
+                              <Textarea
+                                value={day.notes}
+                                onChange={(e) => {
+                                  const workoutDays = [...newProgram.workoutDays];
+                                  workoutDays[dayIndex].notes = e.target.value;
+                                  setNewProgram({ ...newProgram, workoutDays });
+                                }}
+                              />
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-medium">Exercises</h4>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleAddExercise(dayIndex)}
+                                >
+                                  Add Exercise
+                                </Button>
+                              </div>
+
+                              {day.exercises.map((exercise, exerciseIndex) => (
+                                <div key={exerciseIndex} className="space-y-4 p-4 border rounded-lg relative">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-2 top-2"
+                                    onClick={() => handleRemoveExercise(dayIndex, exerciseIndex)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                  <div className="space-y-2">
+                                    <Label>Exercise Name</Label>
+                                    <Input
+                                      value={exercise.name}
+                                      onChange={(e) => {
+                                        const workoutDays = [...newProgram.workoutDays];
+                                        workoutDays[dayIndex].exercises[exerciseIndex].name = e.target.value;
+                                        setNewProgram({ ...newProgram, workoutDays });
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Description</Label>
+                                    <Textarea
+                                      value={exercise.description}
+                                      onChange={(e) => {
+                                        const workoutDays = [...newProgram.workoutDays];
+                                        workoutDays[dayIndex].exercises[exerciseIndex].description = e.target.value;
+                                        setNewProgram({ ...newProgram, workoutDays });
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                      <Label>Sets</Label>
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        value={exercise.sets}
+                                        onChange={(e) => {
+                                          const workoutDays = [...newProgram.workoutDays];
+                                          workoutDays[dayIndex].exercises[exerciseIndex].sets = parseInt(e.target.value);
+                                          setNewProgram({ ...newProgram, workoutDays });
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>Reps</Label>
+                                      <Input
+                                        placeholder="e.g., 8-12 or 12,10,8"
+                                        value={exercise.reps}
+                                        onChange={(e) => {
+                                          const workoutDays = [...newProgram.workoutDays];
+                                          workoutDays[dayIndex].exercises[exerciseIndex].reps = e.target.value;
+                                          setNewProgram({ ...newProgram, workoutDays });
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Rest Time</Label>
+                                    <Input
+                                      placeholder="e.g., 60 seconds"
+                                      value={exercise.restTime}
+                                      onChange={(e) => {
+                                        const workoutDays = [...newProgram.workoutDays];
+                                        workoutDays[dayIndex].exercises[exerciseIndex].restTime = e.target.value;
+                                        setNewProgram({ ...newProgram, workoutDays });
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Notes</Label>
+                                    <Textarea
+                                      value={exercise.notes}
+                                      onChange={(e) => {
+                                        const workoutDays = [...newProgram.workoutDays];
+                                        workoutDays[dayIndex].exercises[exerciseIndex].notes = e.target.value;
+                                        setNewProgram({ ...newProgram, workoutDays });
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+
+                    <Button onClick={handleAddWorkoutDay} className="w-full">
+                      Add Workout Day
                     </Button>
                   </TabsContent>
                 </Tabs>
@@ -361,7 +416,7 @@ export default function Programs() {
                 <Button 
                   className="w-full mt-6" 
                   onClick={handleCreateProgram}
-                  disabled={!newProgram.name || !newProgram.type}
+                  disabled={!newProgram.name || !newProgram.type || newProgram.workoutDays.length === 0}
                 >
                   Create Program
                 </Button>
