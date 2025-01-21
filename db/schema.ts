@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   }>(),
   isPublicProfile: boolean("is_public_profile").default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const programs = pgTable("programs", {
@@ -33,20 +34,24 @@ export const programs = pgTable("programs", {
   isPublic: boolean("is_public").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  cycleLength: integer("cycle_length"), // Number of days in the program cycle, can be null for flexible schedules
+  status: text("status").default("active"), // active, archived, draft
 });
 
 export const routines = pgTable("routines", {
   id: serial("id").primaryKey(),
-  programId: integer("program_id").references(() => programs.id),
+  programId: integer("program_id").references(() => programs.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  dayOfWeek: integer("day_of_week").notNull(), // 0-6 for Sunday-Saturday
-  orderInCycle: integer("order_in_cycle").notNull(),
+  dayOfWeek: integer("day_of_week"), // Can be null for flexible schedules
+  orderInCycle: integer("order_in_cycle"), // Can be null for flexible schedules
   notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const programExercises = pgTable("program_exercises", {
   id: serial("id").primaryKey(),
-  routineId: integer("routine_id").references(() => routines.id),
+  routineId: integer("routine_id").references(() => routines.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
   sets: integer("sets"),
@@ -54,6 +59,10 @@ export const programExercises = pgTable("program_exercises", {
   restTime: text("rest_time"),
   notes: text("notes"),
   orderInRoutine: integer("order_in_routine").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  videoUrl: text("video_url"),
+  imageUrl: text("image_url"),
 });
 
 export const clientPrograms = pgTable("client_programs", {
@@ -63,6 +72,10 @@ export const clientPrograms = pgTable("client_programs", {
   active: boolean("active").default(true),
   startDate: timestamp("start_date").defaultNow(),
   completedWorkouts: integer("completed_workouts").default(0),
+  lastWorkoutDate: timestamp("last_workout_date"),
+  status: text("status").default("active"), // active, completed, paused
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const workoutLogs = pgTable("workout_logs", {
@@ -81,6 +94,10 @@ export const workoutLogs = pgTable("workout_logs", {
     }>;
   }>(),
   date: timestamp("date").defaultNow(),
+  notes: text("notes"),
+  duration: integer("duration"), // in minutes
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const mealLogs = pgTable("meal_logs", {
@@ -93,6 +110,9 @@ export const mealLogs = pgTable("meal_logs", {
   fats: integer("fats"),
   data: json("data"), // Detailed food items
   date: timestamp("date").defaultNow(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const programRelations = relations(programs, ({ one, many }) => ({
@@ -137,14 +157,6 @@ export const clientProgramRelations = relations(clientPrograms, ({ one }) => ({
   }),
 }));
 
-
-export const betaSignups = pgTable("beta_signups", {
-  id: serial("id").primaryKey(),
-  fullName: text("full_name").notNull(),
-  email: text("email").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
 export type User = typeof users.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
@@ -155,6 +167,15 @@ export type MealLog = typeof mealLogs.$inferSelect;
 
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
+export const insertProgramSchema = createInsertSchema(programs);
+export const selectProgramSchema = createSelectSchema(programs);
+
+export const betaSignups = pgTable("beta_signups", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  email: text("email").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
 export type BetaSignup = typeof betaSignups.$inferSelect;
 export const insertBetaSignupSchema = createInsertSchema(betaSignups);
