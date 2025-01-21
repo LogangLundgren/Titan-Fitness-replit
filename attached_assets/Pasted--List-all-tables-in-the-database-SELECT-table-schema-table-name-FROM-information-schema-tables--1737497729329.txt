@@ -1,0 +1,91 @@
+-- List all tables in the database
+SELECT table_schema, table_name
+FROM information_schema.tables
+WHERE table_type = 'BASE TABLE'
+AND table_schema NOT IN ('pg_catalog', 'information_schema');
+
+-- List all views in the database
+SELECT table_schema, table_name
+FROM information_schema.views
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema');
+
+-- List all row-level security policies
+SELECT 
+    schemaname AS table_schema,
+    tablename AS table_name,
+    policyname AS policy_name,
+    permissive,
+    roles,
+    cmd AS command,
+    qual AS using_condition,
+    with_check AS with_check_condition
+FROM pg_policies;
+
+-- List all stored procedures/functions
+SELECT routine_schema, routine_name, routine_type, data_type
+FROM information_schema.routines
+WHERE specific_schema NOT IN ('pg_catalog', 'information_schema');
+
+-- Get schema details
+SELECT schema_name
+FROM information_schema.schemata
+WHERE schema_name NOT IN ('pg_catalog', 'information_schema');
+
+-- Get relationships between tables (foreign key constraints)
+SELECT
+    tc.table_schema AS source_schema,
+    tc.table_name AS source_table,
+    kcu.column_name AS source_column,
+    ccu.table_schema AS target_schema,
+    ccu.table_name AS target_table,
+    ccu.column_name AS target_column
+FROM
+    information_schema.table_constraints AS tc
+    JOIN information_schema.key_column_usage AS kcu
+    ON tc.constraint_name = kcu.constraint_name
+    AND tc.table_schema = kcu.table_schema
+    JOIN information_schema.constraint_column_usage AS ccu
+    ON ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY';
+
+-- Get column details for all tables
+SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema');
+
+-- List all triggers in the database
+SELECT event_object_table AS table_name, trigger_name, event_manipulation AS event, action_statement
+FROM information_schema.triggers;
+
+-- List all indexes for tables
+SELECT
+    t.relname AS table_name,
+    i.relname AS index_name,
+    a.attname AS column_name
+FROM
+    pg_class t,
+    pg_class i,
+    pg_index ix,
+    pg_attribute a
+WHERE
+    t.oid = ix.indrelid
+    AND i.oid = ix.indexrelid
+    AND a.attnum = ANY(ix.indkey)
+    AND t.relkind = 'r'
+ORDER BY
+    t.relname, i.relname;
+
+-- List database relationships and dependencies
+SELECT
+    pg_namespace.nspname AS schema_name,
+    pg_class.relname AS table_name,
+    pg_constraint.conname AS constraint_name,
+    pg_constraint.contype AS constraint_type,
+    pg_attribute.attname AS column_name
+FROM
+    pg_constraint
+    JOIN pg_class ON pg_constraint.conrelid = pg_class.oid
+    JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+    LEFT JOIN pg_attribute ON pg_attribute.attnum = ANY(pg_constraint.conkey)
+WHERE
+    pg_namespace.nspname NOT IN ('pg_catalog', 'information_schema');

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json, real, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 
@@ -14,26 +14,25 @@ export const users = pgTable("users", {
   specialties: text("specialties"),
   certifications: text("certifications"),
   experience: text("experience"),
-  socialLinks: json("social_links").$type<{
+  socialLinks: jsonb("social_links").$type<{
     instagram?: string;
     twitter?: string;
     website?: string;
-  }>(),
+  }>().default('{}'),
   isPublicProfile: boolean("is_public_profile").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
-  type: text("type").notNull(), // "lifting", "diet", "posing", "coaching"
+  type: text("type").notNull(),
   price: real("price").default(0),
   coachId: integer("coach_id").references(() => users.id),
-  isPublic: boolean("is_public").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  isPublic: boolean("is_public").default(false),
   cycleLength: integer("cycle_length"), // Number of days in the program cycle, can be null for flexible schedules
   status: text("status").default("active"), // active, archived, draft
 });
@@ -45,8 +44,14 @@ export const routines = pgTable("routines", {
   dayOfWeek: integer("day_of_week"), // Can be null for flexible schedules
   orderInCycle: integer("order_in_cycle"), // Can be null for flexible schedules
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const programSchedule = pgTable("program_schedule", {
+  id: serial("id").primaryKey(),
+  programId: integer("program_id").references(() => programs.id, { onDelete: "cascade" }),
+  dayOfWeek: integer("day_of_week").notNull(),
+  name: text("name").notNull(),
+  notes: text("notes"),
 });
 
 export const programExercises = pgTable("program_exercises", {
@@ -55,14 +60,10 @@ export const programExercises = pgTable("program_exercises", {
   name: text("name").notNull(),
   description: text("description"),
   sets: integer("sets"),
-  reps: text("reps"), // Can be "8-12" or "12,10,8"
+  reps: text("reps"),
   restTime: text("rest_time"),
   notes: text("notes"),
   orderInRoutine: integer("order_in_routine").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-  videoUrl: text("video_url"),
-  imageUrl: text("image_url"),
 });
 
 export const clientPrograms = pgTable("client_programs", {
@@ -72,10 +73,6 @@ export const clientPrograms = pgTable("client_programs", {
   active: boolean("active").default(true),
   startDate: timestamp("start_date").defaultNow(),
   completedWorkouts: integer("completed_workouts").default(0),
-  lastWorkoutDate: timestamp("last_workout_date"),
-  status: text("status").default("active"), // active, completed, paused
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const workoutLogs = pgTable("workout_logs", {
@@ -83,7 +80,7 @@ export const workoutLogs = pgTable("workout_logs", {
   clientId: integer("client_id").references(() => users.id),
   programId: integer("program_id").references(() => programs.id),
   routineId: integer("routine_id").references(() => routines.id),
-  data: json("data").$type<{
+  data: jsonb("data").$type<{
     exercises: Array<{
       exerciseId: number;
       sets: Array<{
@@ -94,10 +91,6 @@ export const workoutLogs = pgTable("workout_logs", {
     }>;
   }>(),
   date: timestamp("date").defaultNow(),
-  notes: text("notes"),
-  duration: integer("duration"), // in minutes
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const mealLogs = pgTable("meal_logs", {
@@ -110,11 +103,9 @@ export const mealLogs = pgTable("meal_logs", {
   fats: integer("fats"),
   data: json("data"), // Detailed food items
   date: timestamp("date").defaultNow(),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Relations
 export const programRelations = relations(programs, ({ one, many }) => ({
   coach: one(users, {
     fields: [programs.coachId],
@@ -122,6 +113,7 @@ export const programRelations = relations(programs, ({ one, many }) => ({
   }),
   routines: many(routines),
   clientPrograms: many(clientPrograms),
+  schedule: many(programSchedule),
 }));
 
 export const routineRelations = relations(routines, ({ one, many }) => ({
@@ -130,6 +122,13 @@ export const routineRelations = relations(routines, ({ one, many }) => ({
     references: [programs.id],
   }),
   exercises: many(programExercises),
+}));
+
+export const programScheduleRelations = relations(programSchedule, ({ one }) => ({
+  program: one(programs, {
+    fields: [programSchedule.programId],
+    references: [programs.id],
+  }),
 }));
 
 export const programExerciseRelations = relations(programExercises, ({ one }) => ({
@@ -157,14 +156,17 @@ export const clientProgramRelations = relations(clientPrograms, ({ one }) => ({
   }),
 }));
 
+// Types
 export type User = typeof users.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
+export type ProgramSchedule = typeof programSchedule.$inferSelect;
 export type ProgramExercise = typeof programExercises.$inferSelect;
 export type ClientProgram = typeof clientPrograms.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type MealLog = typeof mealLogs.$inferSelect;
 
+// Schemas
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export const insertProgramSchema = createInsertSchema(programs);
