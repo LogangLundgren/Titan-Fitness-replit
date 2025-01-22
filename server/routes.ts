@@ -113,12 +113,15 @@ export function registerRoutes(app: Express): Server {
 
     try {
       const programId = parseInt(req.params.id);
-      const { routines: workoutDays, mealPlans, posingPlan, ...programData } = req.body;
+      const { routines: workoutDays, mealPlans, posingPlan, createdAt, updatedAt, ...programData } = req.body;
 
       // Update program details
       const [updatedProgram] = await db
         .update(programs)
-        .set(programData)
+        .set({
+          ...programData,
+          updatedAt: new Date(),
+        })
         .where(eq(programs.id, programId))
         .returning();
 
