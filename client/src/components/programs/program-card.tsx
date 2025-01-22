@@ -8,13 +8,12 @@ import {
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import type { Program } from "@db/schema";
-import { DumbbellIcon, UtensilsIcon, CameraIcon, HeartHandshakeIcon } from "lucide-react";
+import { DumbbellIcon, UtensilsIcon, CameraIcon } from "lucide-react";
 
 const PROGRAM_ICONS = {
   lifting: DumbbellIcon,
   diet: UtensilsIcon,
   posing: CameraIcon,
-  coaching: HeartHandshakeIcon,
 } as const;
 
 interface ProgramCardProps {
@@ -65,8 +64,6 @@ export function ProgramCard({
         return "Nutrition Plan";
       case "posing":
         return "Posing Coaching";
-      case "coaching":
-        return "Comprehensive Coaching";
       default:
         return type;
     }

@@ -16,6 +16,7 @@ import { Navbar } from "@/components/navigation/navbar";
 import CreateLiftingProgram from "@/pages/program-create/lifting";
 import CreateDietProgram from "@/pages/program-create/diet";
 import CreatePosingProgram from "@/pages/program-create/posing";
+import ManageProgram from "@/pages/program-manage/[id]";
 
 function Router() {
   const { user, isLoading } = useUser();
@@ -48,6 +49,7 @@ function Router() {
           <Route path="/programs/create/lifting" component={CreateLiftingProgram} />
           <Route path="/programs/create/diet" component={CreateDietProgram} />
           <Route path="/programs/create/posing" component={CreatePosingProgram} />
+          <Route path="/programs/:id/manage" component={ManageProgram} />
           <Route path="/meal-log" component={MealLog} />
           <Route path="/profile" component={Profile} />
           <Route component={NotFound} />
