@@ -21,12 +21,14 @@ interface ProgramCardProps {
   program: Program;
   showEnrollButton?: boolean;
   showManageButton?: boolean;
+  onManage?: (programId: number) => void;
 }
 
 export function ProgramCard({
   program,
   showEnrollButton = false,
   showManageButton = false,
+  onManage,
 }: ProgramCardProps) {
   const { toast } = useToast();
   const Icon = PROGRAM_ICONS[program.type as keyof typeof PROGRAM_ICONS] || DumbbellIcon;
@@ -55,6 +57,21 @@ export function ProgramCard({
     }
   };
 
+  const getProgramTypeLabel = (type: string) => {
+    switch (type) {
+      case "lifting":
+        return "Strength Training";
+      case "diet":
+        return "Nutrition Plan";
+      case "posing":
+        return "Posing Coaching";
+      case "coaching":
+        return "Comprehensive Coaching";
+      default:
+        return type;
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -73,19 +90,21 @@ export function ProgramCard({
       </CardHeader>
       <CardContent>
         <div className="flex justify-between items-center">
-          <div className="text-sm text-muted-foreground capitalize">
-            {program.type} Program
+          <div className="text-sm text-muted-foreground">
+            {getProgramTypeLabel(program.type)}
           </div>
-          {showEnrollButton && (
-            <Button onClick={handleEnroll}>
-              Enroll Now
-            </Button>
-          )}
-          {showManageButton && (
-            <Button variant="outline">
-              Manage
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {showEnrollButton && (
+              <Button onClick={handleEnroll}>
+                Enroll Now
+              </Button>
+            )}
+            {showManageButton && onManage && (
+              <Button variant="outline" onClick={() => onManage(program.id)}>
+                Manage
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
