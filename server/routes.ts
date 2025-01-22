@@ -1,10 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { setupAuth } from "./auth";
 import { db } from "@db";
 import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups, users, routines, programExercises } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 
 export function registerRoutes(app: Express): Server {
+  setupAuth(app);
+
   // Programs routes
   app.get("/api/programs", async (req, res) => {
     try {
@@ -508,7 +511,6 @@ export function registerRoutes(app: Express): Server {
       res.status(500).send(error.message);
     }
   });
-
 
   const httpServer = createServer(app);
   return httpServer;
