@@ -31,6 +31,50 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get single program with performance logging
+  app.get("/api/programs/:id", async (req, res) => {
+    try {
+      const startTime = performance.now();
+      console.log(`[Performance] Starting DB query for program ${req.params.id} at ${startTime}ms`);
+
+      // Fetch program with optimized query
+      const [program] = await db.query.programs.findMany({
+        where: eq(programs.id, parseInt(req.params.id)),
+        with: {
+          coach: {
+            columns: {
+              id: true,
+              username: true,
+              fullName: true,
+              specialties: true,
+            }
+          },
+          routines: {
+            with: {
+              exercises: {
+                orderBy: programExercises.orderInRoutine,
+              },
+            },
+            orderBy: routines.orderInCycle,
+          }
+        },
+        limit: 1,
+      });
+
+      const endTime = performance.now();
+      console.log(`[Performance] DB query completed in ${endTime - startTime}ms`);
+
+      if (!program) {
+        return res.status(404).send("Program not found");
+      }
+
+      res.json(program);
+    } catch (error: any) {
+      console.error("Error fetching program:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
   app.post("/api/programs", async (req, res) => {
     if (!req.user?.accountType === "coach") {
       return res.status(403).send("Only coaches can create programs");

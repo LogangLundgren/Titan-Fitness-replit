@@ -30,16 +30,46 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [program, setProgram] = useState<Program | null>(null);
+  const [renderStartTime, setRenderStartTime] = useState<number>(0);
 
+  // Add performance measurement
   const { data: fetchedProgram, isLoading } = useQuery<Program>({
-    queryKey: [`/api/programs/${params.id}`]
+    queryKey: [`/api/programs/${params.id}`],
+    queryFn: async ({ queryKey }) => {
+      const startTime = performance.now();
+      console.log(`[Performance] Starting API request at ${startTime}ms`);
+
+      const response = await fetch(queryKey[0] as string, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const data = await response.json();
+      const endTime = performance.now();
+      console.log(`[Performance] API request completed in ${endTime - startTime}ms`);
+      return data;
+    }
   });
 
   useEffect(() => {
     if (fetchedProgram) {
+      const startTime = performance.now();
+      setRenderStartTime(startTime);
+      console.log(`[Performance] Starting render at ${startTime}ms`);
+
       setProgram(fetchedProgram);
     }
   }, [fetchedProgram]);
+
+  useEffect(() => {
+    if (program && renderStartTime > 0) {
+      const endTime = performance.now();
+      console.log(`[Performance] Render completed in ${endTime - renderStartTime}ms`);
+    }
+  }, [program, renderStartTime]);
 
   const handleSave = async () => {
     if (!program) return;
@@ -47,6 +77,9 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
     try {
       setIsSubmitting(true);
       setShowConfirmDialog(false);
+
+      const startTime = performance.now();
+      console.log(`[Performance] Starting save request at ${startTime}ms`);
 
       const response = await fetch(`/api/programs/${params.id}`, {
         method: "PUT",
@@ -60,6 +93,9 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
       if (!response.ok) {
         throw new Error(await response.text());
       }
+
+      const endTime = performance.now();
+      console.log(`[Performance] Save request completed in ${endTime - startTime}ms`);
 
       await queryClient.invalidateQueries({ queryKey: ["/api/programs"] });
       await queryClient.invalidateQueries({ queryKey: [`/api/programs/${params.id}`] });
@@ -134,8 +170,6 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
             </div>
           </CardContent>
         </Card>
-
-        {/* Type-specific details will be added here based on program type */}
       </div>
 
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
