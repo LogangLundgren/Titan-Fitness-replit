@@ -37,7 +37,7 @@ export function registerRoutes(app: Express): Server {
       const startTime = performance.now();
       console.log(`[Performance] Starting DB query for program ${req.params.id} at ${startTime}ms`);
 
-      // Fetch program with optimized query
+      // Fetch program with optimized query including program-specific data
       const [program] = await db.query.programs.findMany({
         where: eq(programs.id, parseInt(req.params.id)),
         with: {
@@ -53,10 +53,40 @@ export function registerRoutes(app: Express): Server {
             with: {
               exercises: {
                 orderBy: programExercises.orderInRoutine,
+                columns: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  sets: true,
+                  reps: true,
+                  restTime: true,
+                  notes: true,
+                  orderInRoutine: true,
+                }
               },
             },
             orderBy: routines.orderInCycle,
+            columns: {
+              id: true,
+              name: true,
+              dayOfWeek: true,
+              notes: true,
+              orderInCycle: true,
+            }
           }
+        },
+        columns: {
+          id: true,
+          name: true,
+          description: true,
+          type: true,
+          price: true,
+          coachId: true,
+          createdAt: true,
+          updatedAt: true,
+          isPublic: true,
+          cycleLength: true,
+          status: true,
         },
         limit: 1,
       });

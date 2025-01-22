@@ -1,0 +1,32 @@
+Fix the following issues with the Manage Program functionality for all program types (lifting, diet, posing, and comprehensive coaching):
+
+Missing Program Information:
+
+Ensure the API call (GET /api/programs/:id) retrieves all relevant data for the selected program. This includes:
+Program details (e.g., name, description, price).
+Specific plan information:
+Lifting: Exercises, sets, reps, and training days.
+Diet: Meals, macros, and meal times.
+Posing: Bio and any associated notes.
+Update the frontend to display all fetched information in the Manage Program page, allowing the coach to edit all relevant data.
+Save Changes Not Updating:
+
+Ensure the Save Changes button sends all updated information to the backend for all program types. The payload must include:
+Updated program details (e.g., name, description, price).
+Updated program-specific data (e.g., exercises, meals, bio).
+Fix the backend API endpoint (PUT /api/programs/:id) to:
+Save both program details and program-specific data correctly in the database.
+Ensure that the updated data reflects on the marketplace and My Programs tab.
+Global Update Only for Marketplace Programs:
+
+Ensure that the Manage Program button and updates only affect the version of the program on the marketplace.
+Do not apply changes to the client-specific versions of the program. Those should remain untouched unless updated elsewhere.
+Test and Validate:
+
+Verify that all program information loads correctly on the Manage Program page for each program type.
+Confirm that changes made to program details and plan-specific data are saved and reflected correctly in the marketplace and My Programs tab.
+Test that client-specific versions of the program remain unchanged after updates through the Manage Program page.
+Notes:
+This update applies to all program types to ensure consistency across the application.
+Focus on making the Manage Program feature robust and efficient for all use cases.
+Let me know if you encounter specific API or database issues, or if additional clarification is needed!"
