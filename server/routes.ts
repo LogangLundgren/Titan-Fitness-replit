@@ -1,13 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { setupAuth } from "./auth";
 import { db } from "@db";
 import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups, users, routines, programExercises } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 
 export function registerRoutes(app: Express): Server {
-  setupAuth(app);
-
   // Programs routes
   app.get("/api/programs", async (req, res) => {
     try {
@@ -101,6 +98,81 @@ export function registerRoutes(app: Express): Server {
       res.json(program);
     } catch (error: any) {
       console.error("Error fetching program:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Update program
+  app.put("/api/programs/:id", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const programId = parseInt(req.params.id);
+      const { routines: workoutDays, mealPlans, posingPlan, ...programData } = req.body;
+
+      // Update program details
+      const [updatedProgram] = await db
+        .update(programs)
+        .set(programData)
+        .where(eq(programs.id, programId))
+        .returning();
+
+      // Handle program-specific data updates
+      if (updatedProgram.type === "lifting" && workoutDays) {
+        // Delete existing routines and exercises
+        await db.delete(routines).where(eq(routines.programId, programId));
+
+        // Create new routines and exercises
+        for (const [dayIndex, day] of workoutDays.entries()) {
+          const [routine] = await db.insert(routines)
+            .values({
+              programId,
+              name: day.name,
+              dayOfWeek: day.dayOfWeek,
+              orderInCycle: dayIndex + 1,
+              notes: day.notes,
+            })
+            .returning();
+
+          if (day.exercises?.length > 0) {
+            await db.insert(programExercises)
+              .values(
+                day.exercises.map((exercise: any, exerciseIndex: number) => ({
+                  routineId: routine.id,
+                  name: exercise.name,
+                  description: exercise.description,
+                  sets: exercise.sets,
+                  reps: exercise.reps,
+                  restTime: exercise.restTime,
+                  notes: exercise.notes,
+                  orderInRoutine: exerciseIndex + 1,
+                }))
+              );
+          }
+        }
+      }
+
+      // Fetch updated program with all relations
+      const [completeProgram] = await db.query.programs.findMany({
+        where: eq(programs.id, programId),
+        with: {
+          routines: {
+            with: {
+              exercises: {
+                orderBy: programExercises.orderInRoutine,
+              },
+            },
+            orderBy: routines.orderInCycle,
+          }
+        },
+        limit: 1,
+      });
+
+      res.json(completeProgram);
+    } catch (error: any) {
+      console.error("Error updating program:", error);
       res.status(500).send(error.message);
     }
   });
