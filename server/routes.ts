@@ -31,7 +31,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get single program with all type-specific data
   app.get("/api/programs/:id", async (req, res) => {
     try {
       const startTime = performance.now();
@@ -88,8 +87,6 @@ export function registerRoutes(app: Express): Server {
           cycleLength: true,
           status: true,
           programData: true,
-          mealPlans: true,
-          posingDetails: true,
         },
         limit: 1,
       });
@@ -101,7 +98,14 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).send("Program not found");
       }
 
-      res.json(program);
+      // Transform program data based on type
+      const transformedProgram = {
+        ...program,
+        mealPlans: program.type === 'diet' ? program.programData?.mealPlans : undefined,
+        posingDetails: program.type === 'posing' ? program.programData?.posingDetails : undefined,
+      };
+
+      res.json(transformedProgram);
     } catch (error: any) {
       console.error("Error fetching program:", error);
       res.status(500).send(error.message);
@@ -116,14 +120,14 @@ export function registerRoutes(app: Express): Server {
 
     try {
       const programId = parseInt(req.params.id);
-      const { routines: workoutDays, createdAt, updatedAt, ...programData } = req.body;
+      const { routines: workoutDays, mealPlans, posingDetails, createdAt, updatedAt, ...programData } = req.body;
 
-      // Prepare the program data based on program type
-      const typeSpecificData: any = {};
-      if (programData.type === "diet") {
-        typeSpecificData.mealPlans = programData.mealPlans;
-      } else if (programData.type === "posing") {
-        typeSpecificData.posingDetails = programData.posingDetails;
+      // Prepare the program data based on type
+      let typeSpecificData = {};
+      if (programData.type === "diet" && mealPlans) {
+        typeSpecificData = { mealPlans };
+      } else if (programData.type === "posing" && posingDetails) {
+        typeSpecificData = { posingDetails };
       }
 
       // Update program details
@@ -198,13 +202,18 @@ export function registerRoutes(app: Express): Server {
           cycleLength: true,
           status: true,
           programData: true,
-          mealPlans: true,
-          posingDetails: true,
         },
         limit: 1,
       });
 
-      res.json(completeProgram);
+      // Transform response
+      const transformedProgram = {
+        ...completeProgram,
+        mealPlans: completeProgram.type === 'diet' ? completeProgram.programData?.mealPlans : undefined,
+        posingDetails: completeProgram.type === 'posing' ? completeProgram.programData?.posingDetails : undefined,
+      };
+
+      res.json(transformedProgram);
     } catch (error: any) {
       console.error("Error updating program:", error);
       res.status(500).send(error.message);

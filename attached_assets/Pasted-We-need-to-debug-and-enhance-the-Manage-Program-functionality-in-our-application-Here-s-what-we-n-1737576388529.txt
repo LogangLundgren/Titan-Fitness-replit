@@ -1,0 +1,31 @@
+We need to debug and enhance the "Manage Program" functionality in our application. Here's what we need:
+
+### Current Issues:
+1. The "Manage Program" page does not load all associated data (e.g., workout days, meal plans, posing details).
+2. Changes made to program details are not reflected in the marketplace version after saving.
+3. Posing details are missing from the database, so they cannot be loaded or edited.
+
+### Expected Behavior:
+1. When the "Manage" button is clicked:
+   - Fetch the program details (from the `programs` table) and associated data:
+     - Workout plans: From `program_exercises`, `routines`, and `program_schedule`.
+     - Meal plans: From `meal_logs` (if relevant fields exist).
+     - Posing details: Check if these fields exist; if not, update the database schema.
+2. Allow coaches to edit all fetched data, including program details and associated routines or exercises.
+3. Save changes so that the marketplace version of the program is updated without affecting client-specific programs.
+
+### Debugging Steps:
+1. Check the frontend files handling the "Manage Program" page:
+   - Look for data-fetching logic (React Query or Axios calls).
+   - Ensure all API endpoints are being called correctly.
+2. Review backend API routes responsible for fetching and saving program data:
+   - Verify data-fetching queries include relationships between `programs`, `program_exercises`, `routines`, and `program_schedule`.
+   - Ensure posing details are being handled appropriately in the database and backend.
+3. Confirm that save operations in the backend update the correct records.
+
+### Tasks for Replit AI:
+1. Identify and fix the missing data-fetching logic in the "Manage Program" page.
+2. Update the backend API to fetch and return all necessary program data (e.g., workout days, meal plans, posing details).
+3. If posing details are missing from the database schema, update the schema to include this data.
+4. Ensure save operations only update the marketplace version of the program.
+5. Document all changes and test for successful implementation.

@@ -142,6 +142,7 @@ export type MealLog = typeof mealLogs.$inferSelect;
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 
+// Extended schemas for program-specific data
 export const mealPlanSchema = z.object({
   mealName: z.string(),
   targetCalories: z.number(),
@@ -156,6 +157,11 @@ export const posingDetailsSchema = z.object({
   bio: z.string(),
   details: z.string(),
   communicationPreference: z.enum(["email", "chat", "video"]),
+});
+
+export const programDataSchema = z.object({
+  mealPlans: z.array(mealPlanSchema).optional(),
+  posingDetails: posingDetailsSchema.optional(),
 });
 
 export const programSchema = createSelectSchema(programs);
