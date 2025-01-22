@@ -1,0 +1,70 @@
+Sprint 2 Goals
+Dynamic Program Creation:
+
+Update the "Create Program" tab to support dynamic UI changes based on program type:
+Lifting Program: Exercises, sets, reps, training days.
+Diet Plan: Macros, food types, meal times, and nutrition details.
+Posing Plan: Bio and details, along with a communication channel.
+Comprehensive Coaching Program: Combine the above into a single program.
+Predefined Templates:
+
+Add basic templates for common use cases to speed up program creation.
+Program Editing:
+
+Global Edits: Allow coaches to make changes to a base program that applies to all enrolled clients.
+Client-Specific Edits: Allow custom adjustments for individual client versions of a program.
+UI Improvements:
+
+Ensure seamless transitions between program types with clear navigation and validation.
+Proposed Implementation Steps
+Step 1: Create Dynamic Program UI
+Add a dropdown menu to select program type (e.g., Lifting, Diet, Posing).
+Render dynamic forms based on the selected program type:
+Lifting: Add fields for exercises, sets, reps, and training days.
+Diet: Include fields for macros (e.g., protein, carbs, fats), meal plans, and food types.
+Posing: Include a bio input and a text area for additional details.
+Step 2: Integrate Predefined Templates
+Create a “Load Template” button.
+Add predefined templates (e.g., a 3-day lifting split or a basic 1500-calorie diet plan) based on common use cases.
+Store templates in the database with proper schema updates.
+Step 3: Implement Program Editing
+Add an "Edit Program" button for global updates.
+Ensure global edits propagate to all clients.
+Allow program-specific customization from the coach’s dashboard:
+Use a modal or dedicated page for client-specific adjustments.
+Step 4: Optimize Database Schema
+Add a program_type field to distinguish between Lifting, Diet, Posing, and Comprehensive programs.
+Create sub-tables for:
+Exercises (exercise_id, program_id, sets, reps, etc.)
+Meal Plans (meal_id, program_id, macros, etc.)
+Test relationships and data flow.
+Step 5: Testing
+Test program creation and editing for all program types.
+Validate database entries for proper relationships and data integrity.
+Ensure templates load correctly and edits are reflected in the UI.
+Prompt for Replit AI
+Here’s the prompt to give to your AI for Sprint 2:
+
+"Start implementing Sprint 2: Create Program Tab Enhancements. Follow these steps:
+
+Add a dropdown menu to the "Create Program" tab to select the program type (Lifting, Diet, Posing, Comprehensive).
+Render dynamic forms based on the program type:
+Lifting Program: Include fields for exercises, sets, reps, and training days.
+Diet Plan: Include fields for macros (protein, carbs, fats), meal plans, and food types.
+Posing Plan: Include a bio input and a text area for additional details.
+Comprehensive Coaching Program: Combine all three features into a unified form.
+Add a "Load Template" button to preload predefined program templates. Include basic templates like:
+3-day lifting split.
+1500-calorie diet plan.
+Implement "Edit Program" functionality:
+Add an edit button for global updates (affecting all clients enrolled).
+Allow custom adjustments for individual client programs from the coach's dashboard.
+Update the database schema to include:
+A program_type field to distinguish between program types.
+Sub-tables for exercises (exercise_id, program_id, sets, reps) and meal plans (meal_id, program_id, macros, foods).
+Test the functionality thoroughly:
+Validate UI behavior for all program types.
+Verify database updates for program creation, templates, and edits.
+Confirm that client-specific edits are saved correctly.
+Provide SQL scripts for any necessary schema updates and data tests."
+
