@@ -32,8 +32,7 @@ export const programs = pgTable("programs", {
   isPublic: boolean("is_public").default(false),
   cycleLength: integer("cycle_length"),
   status: text("status").default("active"),
-  mealPlans: jsonb("meal_plans").default('{}'),
-  posingDetails: jsonb("posing_details").default('{}'),
+  programData: jsonb("program_data").default('{}'),
 });
 
 export const routines = pgTable("routines", {
@@ -42,14 +41,6 @@ export const routines = pgTable("routines", {
   name: text("name").notNull(),
   dayOfWeek: integer("day_of_week"),
   orderInCycle: integer("order_in_cycle"),
-  notes: text("notes"),
-});
-
-export const programSchedule = pgTable("program_schedule", {
-  id: serial("id").primaryKey(),
-  programId: integer("program_id").references(() => programs.id, { onDelete: "cascade" }),
-  dayOfWeek: integer("day_of_week").notNull(),
-  name: text("name").notNull(),
   notes: text("notes"),
 });
 
@@ -103,7 +94,6 @@ export const programRelations = relations(programs, ({ one, many }) => ({
   }),
   routines: many(routines),
   clientPrograms: many(clientPrograms),
-  schedule: many(programSchedule),
 }));
 
 export const routineRelations = relations(routines, ({ one, many }) => ({
@@ -112,13 +102,6 @@ export const routineRelations = relations(routines, ({ one, many }) => ({
     references: [programs.id],
   }),
   exercises: many(programExercises),
-}));
-
-export const programScheduleRelations = relations(programSchedule, ({ one }) => ({
-  program: one(programs, {
-    fields: [programSchedule.programId],
-    references: [programs.id],
-  }),
 }));
 
 export const programExerciseRelations = relations(programExercises, ({ one }) => ({
@@ -150,7 +133,6 @@ export const clientProgramRelations = relations(clientPrograms, ({ one }) => ({
 export type User = typeof users.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
-export type ProgramSchedule = typeof programSchedule.$inferSelect;
 export type ProgramExercise = typeof programExercises.$inferSelect;
 export type ClientProgram = typeof clientPrograms.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
@@ -176,19 +158,8 @@ export const posingDetailsSchema = z.object({
   communicationPreference: z.enum(["email", "chat", "video"]),
 });
 
-export const programSchema = createSelectSchema(programs).extend({
-  mealPlans: z.object({
-    meals: z.array(mealPlanSchema),
-  }).optional(),
-  posingDetails: posingDetailsSchema.optional(),
-});
-
-export const insertProgramSchema = createInsertSchema(programs).extend({
-  mealPlans: z.object({
-    meals: z.array(mealPlanSchema),
-  }).optional(),
-  posingDetails: posingDetailsSchema.optional(),
-});
+export const programSchema = createSelectSchema(programs);
+export const insertProgramSchema = createInsertSchema(programs);
 
 export const betaSignups = pgTable("beta_signups", {
   id: serial("id").primaryKey(),

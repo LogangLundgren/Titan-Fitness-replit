@@ -87,6 +87,7 @@ export function registerRoutes(app: Express): Server {
           isPublic: true,
           cycleLength: true,
           status: true,
+          programData: true,
           mealPlans: true,
           posingDetails: true,
         },
@@ -117,23 +118,22 @@ export function registerRoutes(app: Express): Server {
       const programId = parseInt(req.params.id);
       const { routines: workoutDays, createdAt, updatedAt, ...programData } = req.body;
 
-      // Prepare the update data
-      const updateData = {
-        ...programData,
-        updatedAt: new Date(),
-        // Handle program-specific data
-        ...(programData.type === "diet" && {
-          mealPlans: programData.mealPlans ? JSON.stringify(programData.mealPlans) : null,
-        }),
-        ...(programData.type === "posing" && {
-          posingDetails: programData.posingDetails ? JSON.stringify(programData.posingDetails) : null,
-        }),
-      };
+      // Prepare the program data based on program type
+      const typeSpecificData: any = {};
+      if (programData.type === "diet") {
+        typeSpecificData.mealPlans = programData.mealPlans;
+      } else if (programData.type === "posing") {
+        typeSpecificData.posingDetails = programData.posingDetails;
+      }
 
       // Update program details
       const [updatedProgram] = await db
         .update(programs)
-        .set(updateData)
+        .set({
+          ...programData,
+          updatedAt: new Date(),
+          programData: typeSpecificData,
+        })
         .where(eq(programs.id, programId))
         .returning();
 
@@ -197,6 +197,7 @@ export function registerRoutes(app: Express): Server {
           isPublic: true,
           cycleLength: true,
           status: true,
+          programData: true,
           mealPlans: true,
           posingDetails: true,
         },
