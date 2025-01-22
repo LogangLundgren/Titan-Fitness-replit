@@ -1,0 +1,85 @@
+Enhance the Manage Program functionality to ensure it supports retrieving, editing, and saving all data for lifting, diet, and posing programs. Additionally, validate and, if needed, update the database schema to store all program-specific details correctly.
+
+Issues Identified:
+Missing Database Storage for Posing Details:
+
+Currently, there is no evidence in the database structure for storing posing program details like bio, additional details, and communication preferences.
+Manage Program Page Data Handling:
+
+The Manage Program page does not load workout days, meal days, or posing details for existing programs.
+Changes to program details, including workouts, meals, and posing specifics, are not saved or reflected after editing.
+Fixes Required:
+1. Validate and Enhance the Database Schema
+Review the database structure to ensure it supports:
+Lifting Programs:
+Workout days, exercises, sets, and reps.
+Diet Plans:
+Meal days, meals, macros, and calories.
+Posing Programs:
+Bio, additional details, and communication preferences.
+If any program-specific data is missing, extend the schema to include the necessary tables and fields.
+Example for posing programs:
+Add a posing_programs table with fields like:
+id (primary key).
+program_id (foreign key linking to the main programs table).
+bio (text).
+details (text).
+communication_preferences (text).
+Ensure relationships between tables (e.g., foreign key constraints) are properly defined for scalability and data integrity.
+2. Update the Backend to Handle New Data
+Extend the backend to support:
+Saving posing program details during creation.
+Fetching all program-specific details when managing a program.
+Saving edits to workout days, meal plans, and posing details.
+3. Fix Manage Program Page Functionality
+Ensure the Manage Program page:
+Loads all program-specific data (workouts, meals, posing details) from the database.
+Allows editing of:
+Workout days (lifting).
+Meal days and plans (diet).
+Posing details (posing).
+Saves all changes and updates the database.
+4. Reuse and Extend Save Mechanisms
+Use the existing save functionality for basic program details as a base.
+Ensure it can:
+Save workout plan edits for lifting programs.
+Save meal plan edits for diet programs.
+Save posing details edits for posing programs.
+Validate the changes are reflected in the My Programs tab and on the marketplace.
+Implementation Tasks:
+1. Database Schema Updates
+Review the current schema and ensure all necessary fields and tables are present.
+Add new tables or columns as required (e.g., posing_programs table).
+Provide SQL scripts to:
+Create missing tables and fields.
+Update existing relationships if necessary.
+2. Backend Updates
+Update API endpoints to:
+Save all program-specific data during creation.
+Fetch full program details when managing a program.
+Save edits to workout days, meal plans, and posing details.
+3. Frontend Updates
+Fix the Manage Program page to:
+Load all relevant data for lifting, diet, and posing programs.
+Display existing workout days, meal plans, and posing details for editing.
+Save edits and reflect changes in the My Programs tab and the marketplace.
+Testing and Validation Steps:
+Validate the Database:
+
+Test the database schema updates.
+Ensure all program-specific data can be saved, retrieved, and updated.
+Test the Backend:
+
+Test API endpoints for program creation, retrieval, and editing.
+Confirm program-specific data is stored and updated correctly.
+Test the Frontend:
+
+Verify the Manage Program page displays all program-specific data.
+Confirm edits are saved and reflected in both the My Programs tab and the marketplace.
+End-to-End Testing:
+
+Test the full lifecycle for lifting, diet, and posing programs:
+Creation → Display → Edit → Save → Reflect Changes.
+Notes:
+Focus on ensuring all data is stored correctly in the database before implementing further frontend functionality.
+Document any issues encountered during implementation or testing.

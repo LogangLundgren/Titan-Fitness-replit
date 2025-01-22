@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, boolean, timestamp, json, real, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
+import { z } from "zod";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -14,11 +15,7 @@ export const users = pgTable("users", {
   specialties: text("specialties"),
   certifications: text("certifications"),
   experience: text("experience"),
-  socialLinks: jsonb("social_links").$type<{
-    instagram?: string;
-    twitter?: string;
-    website?: string;
-  }>().default('{}'),
+  socialLinks: jsonb("social_links").default('{}'),
   isPublicProfile: boolean("is_public_profile").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -33,16 +30,18 @@ export const programs = pgTable("programs", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   isPublic: boolean("is_public").default(false),
-  cycleLength: integer("cycle_length"), // Number of days in the program cycle, can be null for flexible schedules
-  status: text("status").default("active"), // active, archived, draft
+  cycleLength: integer("cycle_length"),
+  status: text("status").default("active"),
+  mealPlans: jsonb("meal_plans").default('{}'),
+  posingDetails: jsonb("posing_details").default('{}'),
 });
 
 export const routines = pgTable("routines", {
   id: serial("id").primaryKey(),
   programId: integer("program_id").references(() => programs.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  dayOfWeek: integer("day_of_week"), // Can be null for flexible schedules
-  orderInCycle: integer("order_in_cycle"), // Can be null for flexible schedules
+  dayOfWeek: integer("day_of_week"),
+  orderInCycle: integer("order_in_cycle"),
   notes: text("notes"),
 });
 
@@ -80,16 +79,7 @@ export const workoutLogs = pgTable("workout_logs", {
   clientId: integer("client_id").references(() => users.id),
   programId: integer("program_id").references(() => programs.id),
   routineId: integer("routine_id").references(() => routines.id),
-  data: jsonb("data").$type<{
-    exercises: Array<{
-      exerciseId: number;
-      sets: Array<{
-        weight: number;
-        reps: number;
-        notes?: string;
-      }>;
-    }>;
-  }>(),
+  data: jsonb("data").default('{}'),
   date: timestamp("date").defaultNow(),
 });
 
@@ -101,7 +91,7 @@ export const mealLogs = pgTable("meal_logs", {
   protein: integer("protein"),
   carbs: integer("carbs"),
   fats: integer("fats"),
-  data: json("data"), // Detailed food items
+  data: jsonb("data").default('{}'),
   date: timestamp("date").defaultNow(),
 });
 
@@ -166,11 +156,39 @@ export type ClientProgram = typeof clientPrograms.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type MealLog = typeof mealLogs.$inferSelect;
 
-// Schemas
+// Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
-export const insertProgramSchema = createInsertSchema(programs);
-export const selectProgramSchema = createSelectSchema(programs);
+
+export const mealPlanSchema = z.object({
+  mealName: z.string(),
+  targetCalories: z.number(),
+  protein: z.number(),
+  carbs: z.number(),
+  fats: z.number(),
+  notes: z.string(),
+  foodSuggestions: z.array(z.string()),
+});
+
+export const posingDetailsSchema = z.object({
+  bio: z.string(),
+  details: z.string(),
+  communicationPreference: z.enum(["email", "chat", "video"]),
+});
+
+export const programSchema = createSelectSchema(programs).extend({
+  mealPlans: z.object({
+    meals: z.array(mealPlanSchema),
+  }).optional(),
+  posingDetails: posingDetailsSchema.optional(),
+});
+
+export const insertProgramSchema = createInsertSchema(programs).extend({
+  mealPlans: z.object({
+    meals: z.array(mealPlanSchema),
+  }).optional(),
+  posingDetails: posingDetailsSchema.optional(),
+});
 
 export const betaSignups = pgTable("beta_signups", {
   id: serial("id").primaryKey(),

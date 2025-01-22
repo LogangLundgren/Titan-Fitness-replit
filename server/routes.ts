@@ -31,7 +31,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get single program with performance logging
+  // Get single program with all type-specific data
   app.get("/api/programs/:id", async (req, res) => {
     try {
       const startTime = performance.now();
@@ -87,6 +87,8 @@ export function registerRoutes(app: Express): Server {
           isPublic: true,
           cycleLength: true,
           status: true,
+          mealPlans: true,
+          posingDetails: true,
         },
         limit: 1,
       });
@@ -105,7 +107,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Update program
+  // Update program with type-specific data
   app.put("/api/programs/:id", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
@@ -113,19 +115,29 @@ export function registerRoutes(app: Express): Server {
 
     try {
       const programId = parseInt(req.params.id);
-      const { routines: workoutDays, mealPlans, posingPlan, createdAt, updatedAt, ...programData } = req.body;
+      const { routines: workoutDays, createdAt, updatedAt, ...programData } = req.body;
+
+      // Prepare the update data
+      const updateData = {
+        ...programData,
+        updatedAt: new Date(),
+        // Handle program-specific data
+        ...(programData.type === "diet" && {
+          mealPlans: programData.mealPlans ? JSON.stringify(programData.mealPlans) : null,
+        }),
+        ...(programData.type === "posing" && {
+          posingDetails: programData.posingDetails ? JSON.stringify(programData.posingDetails) : null,
+        }),
+      };
 
       // Update program details
       const [updatedProgram] = await db
         .update(programs)
-        .set({
-          ...programData,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(programs.id, programId))
         .returning();
 
-      // Handle program-specific data updates
+      // Handle lifting program specific updates
       if (updatedProgram.type === "lifting" && workoutDays) {
         // Delete existing routines and exercises
         await db.delete(routines).where(eq(routines.programId, programId));
@@ -160,7 +172,7 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Fetch updated program with all relations
+      // Fetch the updated program with all related data
       const [completeProgram] = await db.query.programs.findMany({
         where: eq(programs.id, programId),
         with: {
@@ -172,6 +184,21 @@ export function registerRoutes(app: Express): Server {
             },
             orderBy: routines.orderInCycle,
           }
+        },
+        columns: {
+          id: true,
+          name: true,
+          description: true,
+          type: true,
+          price: true,
+          coachId: true,
+          createdAt: true,
+          updatedAt: true,
+          isPublic: true,
+          cycleLength: true,
+          status: true,
+          mealPlans: true,
+          posingDetails: true,
         },
         limit: 1,
       });
