@@ -8,6 +8,108 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
+  // Get client's enrolled programs
+  app.get("/api/client/programs/:id?", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      // If ID is provided, fetch specific program
+      if (req.params.id) {
+        const enrollmentId = parseInt(req.params.id);
+        const [enrollment] = await db.query.clientPrograms.findMany({
+          where: and(
+            eq(clientPrograms.id, enrollmentId),
+            eq(clientPrograms.clientId, req.user.id)
+          ),
+          with: {
+            program: {
+              with: {
+                routines: {
+                  with: {
+                    exercises: {
+                      orderBy: programExercises.orderInRoutine,
+                    },
+                  },
+                  orderBy: routines.orderInCycle,
+                }
+              }
+            },
+          },
+          limit: 1,
+        });
+
+        if (!enrollment) {
+          return res.status(404).json({
+            error: "Program not found",
+            message: "The requested program does not exist or you don't have access to it"
+          });
+        }
+
+        // Transform the response to include client-specific data
+        const program = enrollment.program;
+        const transformedProgram = {
+          enrollmentId: enrollment.id,
+          programId: program.id,
+          name: enrollment.clientProgramData?.customizations?.name || program.name,
+          description: program.description,
+          type: program.type,
+          startDate: enrollment.startDate,
+          active: enrollment.active,
+          version: enrollment.version,
+          routines: enrollment.clientProgramData?.customizations?.routines || program.routines,
+          progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
+        };
+
+        return res.json(transformedProgram);
+      }
+
+      // Otherwise, fetch all enrolled programs
+      const enrolledPrograms = await db.query.clientPrograms.findMany({
+        where: eq(clientPrograms.clientId, req.user.id),
+        with: {
+          program: {
+            with: {
+              routines: {
+                with: {
+                  exercises: {
+                    orderBy: programExercises.orderInRoutine,
+                  },
+                },
+                orderBy: routines.orderInCycle,
+              }
+            }
+          },
+        },
+      });
+
+      const transformedPrograms = enrolledPrograms.map(enrollment => {
+        const program = enrollment.program;
+        return {
+          enrollmentId: enrollment.id,
+          programId: program.id,
+          name: enrollment.clientProgramData?.customizations?.name || program.name,
+          description: program.description,
+          type: program.type,
+          startDate: enrollment.startDate,
+          active: enrollment.active,
+          version: enrollment.version,
+          routines: enrollment.clientProgramData?.customizations?.routines || program.routines,
+          progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
+        };
+      });
+
+      res.json(transformedPrograms);
+    } catch (error: any) {
+      console.error("Error fetching enrolled programs:", error);
+      res.status(500).json({
+        error: "Failed to fetch enrolled programs",
+        details: error.message
+      });
+    }
+  });
+
   // Programs routes
   app.get("/api/programs", async (req, res) => {
     try {
@@ -406,240 +508,66 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  // Get client's enrolled programs
-  app.get("/api/client/programs", async (req, res) => {
-    if (!req.user) {
-      return res.status(401).send("Not authenticated");
-    }
-
-    try {
-      const enrolledPrograms = await db.query.clientPrograms.findMany({
-        where: eq(clientPrograms.clientId, req.user.id),
-        with: {
-          program: {
-            with: {
-              routines: {
-                with: {
-                  exercises: {
-                    orderBy: programExercises.orderInRoutine,
-                  },
-                },
-                orderBy: routines.orderInCycle,
-              }
-            }
-          },
-        },
-      });
-
-      if (!enrolledPrograms.length) {
-        return res.json([]);
-      }
-
-      // Transform the response to include client-specific data
-      const transformedPrograms = enrolledPrograms.map(enrollment => {
-        const program = enrollment.program;
-        return {
-          id: enrollment.id,
-          programId: program.id,
-          name: enrollment.clientProgramData?.customizations?.name || program.name,
-          description: program.description,
-          type: program.type,
-          startDate: enrollment.startDate,
-          active: enrollment.active,
-          version: enrollment.version,
-          routines: enrollment.clientProgramData?.customizations?.routines || program.routines,
-          mealPlans: program.type === 'diet' ?
-            enrollment.clientProgramData?.customizations?.mealPlans || program.programData?.mealPlans :
-            undefined,
-          posingDetails: program.type === 'posing' ?
-            enrollment.clientProgramData?.customizations?.posingDetails || program.programData?.posingDetails :
-            undefined,
-          progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
-        };
-      });
-
-      res.json(transformedPrograms);
-    } catch (error: any) {
-      console.error("Error fetching enrolled programs:", error);
-      res.status(500).json({
-        error: "Failed to fetch enrolled programs",
-        details: error.message
-      });
-    }
-  });
-
-  // Enhanced program enrollment with program copy
-  app.post("/api/programs/:id/enroll", async (req, res) => {
-    if (!req.user) {
-      return res.status(401).send("Not authenticated");
-    }
-
-    try {
-      const programId = parseInt(req.params.id);
-
-      // Check if already enrolled
-      const existingEnrollment = await db.query.clientPrograms.findFirst({
-        where: and(
-          eq(clientPrograms.clientId, req.user.id),
-          eq(clientPrograms.programId, programId),
-          eq(clientPrograms.active, true)
-        ),
-      });
-
-      if (existingEnrollment) {
-        return res.status(400).json({
-          error: "Already enrolled",
-          message: "You are already enrolled in this program"
-        });
-      }
-
-      // Fetch the original program with all its data
-      const [program] = await db.query.programs.findMany({
-        where: eq(programs.id, programId),
-        with: {
-          routines: {
-            with: {
-              exercises: {
-                orderBy: programExercises.orderInRoutine,
-              },
-            },
-            orderBy: routines.orderInCycle,
-          }
-        },
-        limit: 1,
-      });
-
-      if (!program) {
-        return res.status(404).json({
-          error: "Program not found",
-          message: "The requested program does not exist"
-        });
-      }
-
-      // Create client-specific program data
-      const clientProgramData = {
-        customizations: {
-          name: program.name,
-          routines: program.routines,
-          ...(program.type === "diet" && { mealPlans: program.programData?.mealPlans }),
-          ...(program.type === "posing" && { posingDetails: program.programData?.posingDetails }),
-        },
-        progress: {
-          completed: [],
-          notes: [],
-        },
-      };
-
-      // Create the enrollment with the copied data
-      const [enrollment] = await db.insert(clientPrograms)
-        .values({
-          clientId: req.user.id,
-          programId: program.id,
-          clientProgramData: clientProgramData,
-          active: true,
-          version: 1,
-        })
-        .returning();
-
-      // Return the transformed program data
-      const transformedEnrollment = {
-        enrollmentId: enrollment.id,
-        programId: program.id,
-        name: program.name,
-        description: program.description,
-        type: program.type,
-        startDate: enrollment.startDate,
-        active: enrollment.active,
-        version: enrollment.version,
-        routines: program.routines,
-        mealPlans: program.type === 'diet' ? program.programData?.mealPlans : undefined,
-        posingDetails: program.type === 'posing' ? program.programData?.posingDetails : undefined,
-        progress: { completed: [], notes: [] },
-      };
-
-      res.json(transformedEnrollment);
-    } catch (error: any) {
-      console.error("Error enrolling in program:", error);
-      res.status(500).json({
-        error: "Enrollment failed",
-        details: error.message
-      });
-    }
-  });
-
-  // Update client-specific program
-  app.put("/api/client/programs/:enrollmentId", async (req, res) => {
-    if (!req.user) {
-      return res.status(401).send("Not authenticated");
-    }
-
-    try {
-      const enrollmentId = parseInt(req.params.enrollmentId);
-      const { customizations, progress } = req.body;
-
-      // Verify ownership
-      const [existing] = await db.select()
-        .from(clientPrograms)
-        .where(and(
-          eq(clientPrograms.id, enrollmentId),
-          eq(clientPrograms.clientId, req.user.id)
-        ))
-        .limit(1);
-
-      if (!existing) {
-        return res.status(404).send("Enrolled program not found");
-      }
-
-      // Update client-specific program data
-      const [updated] = await db.update(clientPrograms)
-        .set({
-          clientProgramData: {
-            customizations,
-            progress,
-          },
-          lastModified: new Date(),
-          version: existing.version + 1,
-        })
-        .where(eq(clientPrograms.id, enrollmentId))
-        .returning();
-
-      res.json(updated);
-    } catch (error: any) {
-      console.error("Error updating client program:", error);
-      res.status(500).send(error.message);
-    }
-  });
-
   // Workout logging
   app.post("/api/workouts", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
     }
 
-    const log = await db.insert(workoutLogs)
-      .values({
-        clientId: req.user.id,
-        ...req.body
-      })
-      .returning();
+    try {
+      const { clientProgramId, routineId, data } = req.body;
 
-    res.json(log[0]);
-  });
+      // Verify the client has access to this program
+      const [enrollment] = await db.query.clientPrograms.findMany({
+        where: and(
+          eq(clientPrograms.id, clientProgramId),
+          eq(clientPrograms.clientId, req.user.id)
+        ),
+        limit: 1,
+      });
 
-  // Meal logging
-  app.post("/api/meals", async (req, res) => {
-    if (!req.user) {
-      return res.status(401).send("Not authenticated");
+      if (!enrollment) {
+        return res.status(404).send("Program enrollment not found");
+      }
+
+      // Create workout log
+      const [log] = await db.insert(workoutLogs)
+        .values({
+          clientId: req.user.id,
+          clientProgramId,
+          routineId,
+          data,
+          date: new Date(),
+        })
+        .returning();
+
+      // Update client program progress
+      const progress = enrollment.clientProgramData?.progress || { completed: [], notes: [] };
+      progress.completed = [...new Set([...progress.completed, routineId.toString()])];
+
+      if (data.notes) {
+        progress.notes = [...(progress.notes || []), {
+          date: new Date().toISOString(),
+          routineId,
+          note: data.notes,
+        }];
+      }
+
+      await db.update(clientPrograms)
+        .set({
+          clientProgramData: {
+            ...enrollment.clientProgramData,
+            progress,
+          },
+          lastModified: new Date(),
+        })
+        .where(eq(clientPrograms.id, clientProgramId));
+
+      res.json(log);
+    } catch (error: any) {
+      console.error("Error logging workout:", error);
+      res.status(500).send(error.message);
     }
-
-    const log = await db.insert(mealLogs)
-      .values({
-        clientId: req.user.id,
-        ...req.body
-      })
-      .returning();
-
-    res.json(log[0]);
   });
 
   // Enhanced progress data with analytics
