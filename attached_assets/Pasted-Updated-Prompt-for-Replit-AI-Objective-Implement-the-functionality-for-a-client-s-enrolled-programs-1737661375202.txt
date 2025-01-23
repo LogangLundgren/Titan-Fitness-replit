@@ -1,0 +1,90 @@
+Updated Prompt for Replit AI
+Objective: Implement the functionality for a client's enrolled programs to display correctly on their "Programs" tab and enable program-specific logging functionality. Ensure that each enrolled program creates a unique copy for the client in the database. This ensures that any updates or changes made by the coach to a program are specific to that client and do not affect the global program or other clients.
+
+1. Enrolled Programs Display
+Retrieve Enrolled Programs:
+
+Fetch unique client-specific program data from the client_programs table based on the client_id.
+Ensure the client_programs table includes a reference to the original program ID (from programs), but also stores unique data specific to the client’s version of the program, such as:
+Program Name
+Description
+Type (e.g., Lifting, Meal Plan, Posing)
+Progress (if applicable)
+Customizations made by the coach for the specific client.
+Display Programs:
+
+Update the client's "Programs" tab to list all enrolled programs.
+Ensure programs are grouped by type (e.g., Lifting, Meal Plan, Posing).
+Include buttons for each program to:
+View Details: Opens a detailed page for the client-specific program.
+Log Progress: Opens the logging interface specific to the client-specific program type.
+2. Logging Functionality
+General Logging Requirements:
+
+Use the unique client-specific program data (from client_programs) to allow clients to log progress.
+Ensure logs are linked to the unique client-specific program ID.
+A. Lifting Program Logging
+
+For each workout day:
+List all exercises, sets, and reps from the client-specific version of the program.
+Allow the client to log:
+Actual sets and reps completed.
+Notes for each exercise.
+Save logs to the workout_logs table, linking them to the correct client-specific program ID and routine ID.
+B. Meal Plan Logging
+
+Allow clients to:
+Log meals eaten (with macro details like calories, protein, carbs, fats).
+Save the logs to the meal_logs table, linked to the client-specific program ID.
+Display a summary of logged meals for the day.
+C. Posing Program Logging
+
+Enable a file upload feature for videos/images.
+Allow clients to send notes or messages to their coach.
+Save logs to a communication_logs table, linked to the client-specific program ID.
+3. Frontend Updates
+Programs Tab:
+
+Add a section to display enrolled programs, categorized by type.
+Include a "View Details" button for client-specific program details and "Log Progress" for the logging interface.
+Logging Interfaces:
+
+Create logging forms for:
+Lifting programs (exercise-based).
+Meal plans (macro-based).
+Posing programs (communication-based).
+Ensure smooth navigation between the programs tab and the logging interfaces.
+4. Backend Updates
+Database Updates:
+
+Update the client_programs table to include:
+
+A reference to the original program ID from programs.
+All client-specific program data, such as workout details, meal plans, and posing details.
+Ensure logs are linked to client-specific program IDs:
+
+workout_logs for lifting programs.
+meal_logs for meal plans.
+communication_logs for posing programs.
+Data Handling:
+
+When a client enrolls in a program:
+Copy the program data from programs into client_programs, creating a unique client-specific program record.
+Ensure the copied data includes all details needed for lifting, meal plans, or posing.
+Data Storage:
+
+Save logs to the correct tables:
+workout_logs for lifting programs.
+meal_logs for meal plans.
+communication_logs for posing programs.
+Error Handling:
+
+Handle cases where a client has no enrolled programs gracefully.
+Validate all input data before saving logs.
+5. Testing
+Test that enrolling in a program creates a unique client-specific program copy.
+Test that enrolled programs appear correctly in the "Programs" tab.
+Test logging functionality for each program type:
+Ensure data is saved to the appropriate database tables.
+Verify updates reflect correctly in the UI.
+Test edge cases (e.g., missing or incorrect data).

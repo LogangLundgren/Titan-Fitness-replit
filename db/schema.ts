@@ -30,8 +30,6 @@ export const programs = pgTable("programs", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   isPublic: boolean("is_public").default(false),
-  cycleLength: integer("cycle_length"),
-  status: text("status").default("active"),
   programData: jsonb("program_data").default('{}'),
 });
 
@@ -63,12 +61,15 @@ export const clientPrograms = pgTable("client_programs", {
   active: boolean("active").default(true),
   startDate: timestamp("start_date").defaultNow(),
   completedWorkouts: integer("completed_workouts").default(0),
+  clientProgramData: jsonb("client_program_data").default('{}'),
+  lastModified: timestamp("last_modified").defaultNow(),
+  version: integer("version").default(1),
 });
 
 export const workoutLogs = pgTable("workout_logs", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => users.id),
-  programId: integer("program_id").references(() => programs.id),
+  clientProgramId: integer("client_program_id").references(() => clientPrograms.id),
   routineId: integer("routine_id").references(() => routines.id),
   data: jsonb("data").default('{}'),
   date: timestamp("date").defaultNow(),
@@ -77,7 +78,7 @@ export const workoutLogs = pgTable("workout_logs", {
 export const mealLogs = pgTable("meal_logs", {
   id: serial("id").primaryKey(),
   clientId: integer("client_id").references(() => users.id),
-  programId: integer("program_id").references(() => programs.id),
+  clientProgramId: integer("client_program_id").references(() => clientPrograms.id),
   calories: integer("calories"),
   protein: integer("protein"),
   carbs: integer("carbs"),
@@ -86,7 +87,13 @@ export const mealLogs = pgTable("meal_logs", {
   date: timestamp("date").defaultNow(),
 });
 
-// Relations
+export const betaSignups = pgTable("beta_signups", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  email: text("email").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const programRelations = relations(programs, ({ one, many }) => ({
   coach: one(users, {
     fields: [programs.coachId],
@@ -118,7 +125,7 @@ export const userRelations = relations(users, ({ many }) => ({
   mealLogs: many(mealLogs),
 }));
 
-export const clientProgramRelations = relations(clientPrograms, ({ one }) => ({
+export const clientProgramRelations = relations(clientPrograms, ({ one, many }) => ({
   client: one(users, {
     fields: [clientPrograms.clientId],
     references: [users.id],
@@ -127,9 +134,10 @@ export const clientProgramRelations = relations(clientPrograms, ({ one }) => ({
     fields: [clientPrograms.programId],
     references: [programs.id],
   }),
+  workoutLogs: many(workoutLogs),
+  mealLogs: many(mealLogs),
 }));
 
-// Types
 export type User = typeof users.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
@@ -137,12 +145,11 @@ export type ProgramExercise = typeof programExercises.$inferSelect;
 export type ClientProgram = typeof clientPrograms.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type MealLog = typeof mealLogs.$inferSelect;
+export type BetaSignup = typeof betaSignups.$inferSelect;
 
-// Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 
-// Extended schemas for program-specific data
 export const mealPlanSchema = z.object({
   mealName: z.string(),
   targetCalories: z.number(),
@@ -167,13 +174,21 @@ export const programDataSchema = z.object({
 export const programSchema = createSelectSchema(programs);
 export const insertProgramSchema = createInsertSchema(programs);
 
-export const betaSignups = pgTable("beta_signups", {
-  id: serial("id").primaryKey(),
-  fullName: text("full_name").notNull(),
-  email: text("email").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export type BetaSignup = typeof betaSignups.$inferSelect;
 export const insertBetaSignupSchema = createInsertSchema(betaSignups);
 export const selectBetaSignupSchema = createSelectSchema(betaSignups);
+
+export const clientProgramDataSchema = z.object({
+  customizations: z.object({
+    name: z.string().optional(),
+    notes: z.string().optional(),
+    routines: z.array(z.any()).optional(),
+    mealPlans: z.array(mealPlanSchema).optional(),
+    posingDetails: posingDetailsSchema.optional(),
+  }).optional(),
+  progress: z.object({
+    completed: z.array(z.string()).optional(),
+    notes: z.array(z.string()).optional(),
+  }).optional(),
+});
+
+export type ClientProgramData = z.infer<typeof clientProgramDataSchema>;

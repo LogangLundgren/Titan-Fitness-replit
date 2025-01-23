@@ -406,20 +406,133 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  // Client program enrollment
+  // Enhanced program enrollment with program copy
   app.post("/api/programs/:id/enroll", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
     }
 
-    const enrollment = await db.insert(clientPrograms)
-      .values({
-        clientId: req.user.id,
-        programId: parseInt(req.params.id),
-      })
-      .returning();
+    try {
+      // Fetch the original program with all its data
+      const [program] = await db.query.programs.findMany({
+        where: eq(programs.id, parseInt(req.params.id)),
+        with: {
+          routines: {
+            with: {
+              exercises: true,
+            },
+          }
+        },
+        limit: 1,
+      });
 
-    res.json(enrollment[0]);
+      if (!program) {
+        return res.status(404).send("Program not found");
+      }
+
+      // Create client-specific program data
+      const clientProgramData = {
+        customizations: {
+          name: program.name,
+          routines: program.routines,
+          ...(program.type === "diet" && { mealPlans: program.programData?.mealPlans }),
+          ...(program.type === "posing" && { posingDetails: program.programData?.posingDetails }),
+        },
+        progress: {
+          completed: [],
+          notes: [],
+        },
+      };
+
+      // Create the enrollment with the copied data
+      const [enrollment] = await db.insert(clientPrograms)
+        .values({
+          clientId: req.user.id,
+          programId: program.id,
+          clientProgramData: clientProgramData,
+          version: 1,
+        })
+        .returning();
+
+      res.json(enrollment);
+    } catch (error: any) {
+      console.error("Error enrolling in program:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Get client's enrolled programs
+  app.get("/api/client/programs", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const enrolledPrograms = await db.query.clientPrograms.findMany({
+        where: eq(clientPrograms.clientId, req.user.id),
+        with: {
+          program: true,
+        },
+      });
+
+      // Transform the response to include client-specific data
+      const transformedPrograms = enrolledPrograms.map(enrollment => ({
+        ...enrollment.program,
+        clientData: enrollment.clientProgramData,
+        enrollmentId: enrollment.id,
+        startDate: enrollment.startDate,
+        active: enrollment.active,
+        version: enrollment.version,
+      }));
+
+      res.json(transformedPrograms);
+    } catch (error: any) {
+      console.error("Error fetching enrolled programs:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Update client-specific program
+  app.put("/api/client/programs/:enrollmentId", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const enrollmentId = parseInt(req.params.enrollmentId);
+      const { customizations, progress } = req.body;
+
+      // Verify ownership
+      const [existing] = await db.select()
+        .from(clientPrograms)
+        .where(and(
+          eq(clientPrograms.id, enrollmentId),
+          eq(clientPrograms.clientId, req.user.id)
+        ))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).send("Enrolled program not found");
+      }
+
+      // Update client-specific program data
+      const [updated] = await db.update(clientPrograms)
+        .set({
+          clientProgramData: {
+            customizations,
+            progress,
+          },
+          lastModified: new Date(),
+          version: existing.version + 1,
+        })
+        .where(eq(clientPrograms.id, enrollmentId))
+        .returning();
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating client program:", error);
+      res.status(500).send(error.message);
+    }
   });
 
   // Workout logging
