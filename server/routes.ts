@@ -406,6 +406,68 @@ export function registerRoutes(app: Express): Server {
   });
 
 
+  // Get client's enrolled programs
+  app.get("/api/client/programs", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const enrolledPrograms = await db.query.clientPrograms.findMany({
+        where: eq(clientPrograms.clientId, req.user.id),
+        with: {
+          program: {
+            with: {
+              routines: {
+                with: {
+                  exercises: {
+                    orderBy: programExercises.orderInRoutine,
+                  },
+                },
+                orderBy: routines.orderInCycle,
+              }
+            }
+          },
+        },
+      });
+
+      if (!enrolledPrograms.length) {
+        return res.json([]);
+      }
+
+      // Transform the response to include client-specific data
+      const transformedPrograms = enrolledPrograms.map(enrollment => {
+        const program = enrollment.program;
+        return {
+          id: enrollment.id,
+          programId: program.id,
+          name: enrollment.clientProgramData?.customizations?.name || program.name,
+          description: program.description,
+          type: program.type,
+          startDate: enrollment.startDate,
+          active: enrollment.active,
+          version: enrollment.version,
+          routines: enrollment.clientProgramData?.customizations?.routines || program.routines,
+          mealPlans: program.type === 'diet' ? 
+            enrollment.clientProgramData?.customizations?.mealPlans || program.programData?.mealPlans : 
+            undefined,
+          posingDetails: program.type === 'posing' ? 
+            enrollment.clientProgramData?.customizations?.posingDetails || program.programData?.posingDetails : 
+            undefined,
+          progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
+        };
+      });
+
+      res.json(transformedPrograms);
+    } catch (error: any) {
+      console.error("Error fetching enrolled programs:", error);
+      res.status(500).json({
+        error: "Failed to fetch enrolled programs",
+        details: error.message
+      });
+    }
+  });
+
   // Enhanced program enrollment with program copy
   app.post("/api/programs/:id/enroll", async (req, res) => {
     if (!req.user) {
@@ -413,21 +475,45 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
+      const programId = parseInt(req.params.id);
+
+      // Check if already enrolled
+      const existingEnrollment = await db.query.clientPrograms.findFirst({
+        where: and(
+          eq(clientPrograms.clientId, req.user.id),
+          eq(clientPrograms.programId, programId),
+          eq(clientPrograms.active, true)
+        ),
+      });
+
+      if (existingEnrollment) {
+        return res.status(400).json({
+          error: "Already enrolled",
+          message: "You are already enrolled in this program"
+        });
+      }
+
       // Fetch the original program with all its data
       const [program] = await db.query.programs.findMany({
-        where: eq(programs.id, parseInt(req.params.id)),
+        where: eq(programs.id, programId),
         with: {
           routines: {
             with: {
-              exercises: true,
+              exercises: {
+                orderBy: programExercises.orderInRoutine,
+              },
             },
+            orderBy: routines.orderInCycle,
           }
         },
         limit: 1,
       });
 
       if (!program) {
-        return res.status(404).send("Program not found");
+        return res.status(404).json({
+          error: "Program not found",
+          message: "The requested program does not exist"
+        });
       }
 
       // Create client-specific program data
@@ -450,45 +536,34 @@ export function registerRoutes(app: Express): Server {
           clientId: req.user.id,
           programId: program.id,
           clientProgramData: clientProgramData,
+          active: true,
           version: 1,
         })
         .returning();
 
-      res.json(enrollment);
-    } catch (error: any) {
-      console.error("Error enrolling in program:", error);
-      res.status(500).send(error.message);
-    }
-  });
-
-  // Get client's enrolled programs
-  app.get("/api/client/programs", async (req, res) => {
-    if (!req.user) {
-      return res.status(401).send("Not authenticated");
-    }
-
-    try {
-      const enrolledPrograms = await db.query.clientPrograms.findMany({
-        where: eq(clientPrograms.clientId, req.user.id),
-        with: {
-          program: true,
-        },
-      });
-
-      // Transform the response to include client-specific data
-      const transformedPrograms = enrolledPrograms.map(enrollment => ({
-        ...enrollment.program,
-        clientData: enrollment.clientProgramData,
-        enrollmentId: enrollment.id,
+      // Return the transformed program data
+      const transformedEnrollment = {
+        id: enrollment.id,
+        programId: program.id,
+        name: program.name,
+        description: program.description,
+        type: program.type,
         startDate: enrollment.startDate,
         active: enrollment.active,
         version: enrollment.version,
-      }));
+        routines: program.routines,
+        mealPlans: program.type === 'diet' ? program.programData?.mealPlans : undefined,
+        posingDetails: program.type === 'posing' ? program.programData?.posingDetails : undefined,
+        progress: { completed: [], notes: [] },
+      };
 
-      res.json(transformedPrograms);
+      res.json(transformedEnrollment);
     } catch (error: any) {
-      console.error("Error fetching enrolled programs:", error);
-      res.status(500).send(error.message);
+      console.error("Error enrolling in program:", error);
+      res.status(500).json({
+        error: "Enrollment failed",
+        details: error.message
+      });
     }
   });
 
