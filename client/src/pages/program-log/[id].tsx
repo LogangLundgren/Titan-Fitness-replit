@@ -77,6 +77,14 @@ interface WorkoutLog {
   notes?: string;
 }
 
+interface MealLog {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  notes?: string;
+}
+
 export default function ProgramLog() {
   const { id } = useParams();
   const { toast } = useToast();
@@ -85,6 +93,13 @@ export default function ProgramLog() {
   const [workoutData, setWorkoutData] = useState<WorkoutLog>({
     routineId: 0,
     exerciseLogs: [],
+    notes: "",
+  });
+  const [mealData, setMealData] = useState<MealLog>({
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
     notes: "",
   });
 
@@ -129,6 +144,45 @@ export default function ProgramLog() {
         description: "Workout logged successfully",
       });
       resetForm();
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    },
+  });
+
+  // Mutation for logging meal
+  const logMealMutation = useMutation({
+    mutationFn: async (log: MealLog) => {
+      const response = await fetch(`/api/meals`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          clientProgramId: parseInt(id),
+          data: log,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/client/programs", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals", id] });
+      toast({
+        title: "Success",
+        description: "Meal logged successfully",
+      });
+      resetMealForm();
     },
     onError: (error: Error) => {
       toast({
@@ -187,6 +241,20 @@ export default function ProgramLog() {
     });
   };
 
+  const handleMealSubmit = () => {
+    logMealMutation.mutate(mealData);
+  };
+
+  const resetMealForm = () => {
+    setMealData({
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      notes: "",
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -212,7 +280,6 @@ export default function ProgramLog() {
     );
   }
 
-  // Update the renderContent function to handle different program types
   function renderContent(type: string) {
     switch (type) {
       case "lifting":
@@ -439,31 +506,74 @@ export default function ProgramLog() {
                       <Input
                         type="number"
                         placeholder="Enter calories"
+                        value={mealData.calories || ""}
+                        onChange={(e) => setMealData(prev => ({
+                          ...prev,
+                          calories: e.target.value ? parseInt(e.target.value) : 0
+                        }))}
                         className="w-full"
                       />
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <Label>Protein (g)</Label>
-                        <Input type="number" placeholder="0" />
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={mealData.protein || ""}
+                          onChange={(e) => setMealData(prev => ({
+                            ...prev,
+                            protein: e.target.value ? parseInt(e.target.value) : 0
+                          }))}
+                        />
                       </div>
                       <div>
                         <Label>Carbs (g)</Label>
-                        <Input type="number" placeholder="0" />
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={mealData.carbs || ""}
+                          onChange={(e) => setMealData(prev => ({
+                            ...prev,
+                            carbs: e.target.value ? parseInt(e.target.value) : 0
+                          }))}
+                        />
                       </div>
                       <div>
                         <Label>Fat (g)</Label>
-                        <Input type="number" placeholder="0" />
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={mealData.fat || ""}
+                          onChange={(e) => setMealData(prev => ({
+                            ...prev,
+                            fat: e.target.value ? parseInt(e.target.value) : 0
+                          }))}
+                        />
                       </div>
                     </div>
                     <div>
                       <Label>Notes</Label>
                       <Textarea
                         placeholder="Add any notes about your meal..."
+                        value={mealData.notes || ""}
+                        onChange={(e) => setMealData(prev => ({
+                          ...prev,
+                          notes: e.target.value
+                        }))}
                         className="h-32"
                       />
                     </div>
-                    <Button className="w-full">Save Meal Log</Button>
+                    <Button
+                      className="w-full"
+                      onClick={handleMealSubmit}
+                      disabled={logMealMutation.isPending}
+                    >
+                      {logMealMutation.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Save Meal Log
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -486,7 +596,15 @@ export default function ProgramLog() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {/* Add meal history data here */}
+                      {program?.progress?.completed.map((entry, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{new Date(entry).toLocaleDateString()}</TableCell>
+                          <TableCell>-</TableCell>
+                          <TableCell>-</TableCell>
+                          <TableCell>-</TableCell>
+                          <TableCell>-</TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </CardContent>

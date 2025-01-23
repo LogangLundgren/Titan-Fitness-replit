@@ -1,0 +1,43 @@
+Warning: Received NaN for the &#x60;value&#x60; attribute. If this is expected, cast the value to a string.
+    at input
+    at _c (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/components/ui/input.tsx:20:11)
+    at div
+    at div
+    at div
+    at _c9 (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/components/ui/card.tsx:106:12)
+    at div
+    at _c (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at div
+    at div
+    at ManageProgram (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/pages/program-manage/[id].tsx:58:41)
+    at Route (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=47fbde18:323:16)
+    at Switch (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=47fbde18:379:17)
+    at main
+    at div
+    at Router (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/App.tsx?v=IVOIPiG3wjFyYT-vmlhGk:39:31)
+    at QueryClientProvider (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=47fbde18:2805:3)
+    at App
+at input
+at _c (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/components/ui/input.tsx:20:11)
+at div
+at div
+at div
+at _c9 (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/components/ui/card.tsx:106:12)
+at div
+at _c (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/components/ui/card.tsx:20:11)
+at div
+at div
+at div
+at ManageProgram (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/pages/program-manage/[id].tsx:58:41)
+at Route (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=47fbde18:323:16)
+at Switch (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=47fbde18:379:17)
+at main
+at div
+at Router (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/src/App.tsx?v=IVOIPiG3wjFyYT-vmlhGk:39:31)
+at QueryClientProvider (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=47fbde18:2805:3)
+at App
+at t.value (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://48b02ecb-95d6-41b8-be34-8ec114e40f1d-00-3s0klh10jgy1b.worf.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
