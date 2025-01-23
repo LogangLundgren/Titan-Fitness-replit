@@ -122,7 +122,7 @@ export function ProgramCard({
             <CardTitle>{program.name}</CardTitle>
           </div>
           <div className="text-sm font-medium">
-            {program.price === 0 ? "Free" : `$${program.price}`}
+            {typeof program.price === 'number' ? (program.price === 0 ? "Free" : `$${program.price}`) : "Free"}
           </div>
         </div>
         <CardDescription>{program.description}</CardDescription>
