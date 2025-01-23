@@ -1,13 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface Program {
   id: number;
@@ -18,11 +25,9 @@ interface Program {
     id: number;
     name: string;
     exercises: Array<{
-      id: number;
       name: string;
       sets: number;
       reps: string;
-      notes?: string;
     }>;
   }>;
 }
@@ -30,9 +35,9 @@ interface Program {
 export default function ProgramLog() {
   const { id } = useParams();
   const { toast } = useToast();
-  const [selectedRoutine, setSelectedRoutine] = useState<number | null>(null);
-  const [logData, setLogData] = useState({
-    notes: "",
+  const [selectedRoutine, setSelectedRoutine] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [mealData, setMealData] = useState({
     calories: "",
     protein: "",
     carbs: "",
@@ -43,19 +48,26 @@ export default function ProgramLog() {
     queryKey: [`/api/programs/${id}`],
   });
 
-  const handleLogSubmit = async () => {
+  const handleSaveLog = async () => {
+    if (!program) return;
+
     try {
+      const logData = program.type === 'diet' ? {
+        ...mealData,
+        notes,
+      } : {
+        routineId: selectedRoutine,
+        notes,
+      };
+
       const response = await fetch(`/api/programs/${id}/logs`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          logType: program?.type,
-          data: {
-            ...logData,
-            routineId: selectedRoutine,
-          },
+          logType: program.type,
+          data: logData,
         }),
       });
 
@@ -69,14 +81,17 @@ export default function ProgramLog() {
       });
 
       // Reset form
-      setLogData({
-        notes: "",
-        calories: "",
-        protein: "",
-        carbs: "",
-        fats: "",
-      });
-      setSelectedRoutine(null);
+      if (program.type === 'diet') {
+        setMealData({
+          calories: "",
+          protein: "",
+          carbs: "",
+          fats: "",
+        });
+      } else {
+        setSelectedRoutine("");
+      }
+      setNotes("");
     } catch (error) {
       toast({
         variant: "destructive",
@@ -94,147 +109,156 @@ export default function ProgramLog() {
     );
   }
 
+  const renderLiftingLog = () => (
+    <div className="space-y-4">
+      <div>
+        <Label>Select Routine</Label>
+        <Select value={selectedRoutine} onValueChange={setSelectedRoutine}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a routine" />
+          </SelectTrigger>
+          <SelectContent>
+            {program.routines?.map((routine) => (
+              <SelectItem key={routine.id} value={routine.id.toString()}>
+                {routine.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Notes</Label>
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add any notes about your workout..."
+          className="h-32"
+        />
+      </div>
+      <Button onClick={handleSaveLog} className="w-full">
+        Save Log
+      </Button>
+    </div>
+  );
+
+  const renderMealLog = () => (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div>
+          <Label>Calories Consumed</Label>
+          <Input
+            type="number"
+            value={mealData.calories}
+            onChange={(e) => setMealData({ ...mealData, calories: e.target.value })}
+            placeholder="0"
+          />
+          <div className="mt-1 text-sm text-muted-foreground">
+            Target: 550g
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <Label>Protein (g)</Label>
+            <Input
+              type="number"
+              value={mealData.protein}
+              onChange={(e) => setMealData({ ...mealData, protein: e.target.value })}
+              placeholder="0"
+            />
+            <div className="mt-1 text-sm text-muted-foreground">
+              Target: 20g
+            </div>
+          </div>
+          <div>
+            <Label>Carbs (g)</Label>
+            <Input
+              type="number"
+              value={mealData.carbs}
+              onChange={(e) => setMealData({ ...mealData, carbs: e.target.value })}
+              placeholder="0"
+            />
+            <div className="mt-1 text-sm text-muted-foreground">
+              Target: 5g
+            </div>
+          </div>
+          <div>
+            <Label>Fats (g)</Label>
+            <Input
+              type="number"
+              value={mealData.fats}
+              onChange={(e) => setMealData({ ...mealData, fats: e.target.value })}
+              placeholder="0"
+            />
+            <div className="mt-1 text-sm text-muted-foreground">
+              Target: 5g
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <Label>Logged Foods</Label>
+        <div className="mt-2 text-sm text-muted-foreground">
+          No foods logged yet
+        </div>
+        <Button variant="outline" className="mt-4 w-full">
+          Add Food
+        </Button>
+      </div>
+
+      <Button onClick={handleSaveLog} className="w-full">
+        Submit Meal Log
+      </Button>
+    </div>
+  );
+
+  const renderPosingLog = () => (
+    <div className="space-y-4">
+      <div>
+        <Label>Session Notes</Label>
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add notes about your posing practice..."
+          className="h-32"
+        />
+      </div>
+      <Button onClick={handleSaveLog} className="w-full">
+        Save Log
+      </Button>
+    </div>
+  );
+
   const renderLogForm = () => {
     switch (program.type) {
       case "lifting":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Select Routine</Label>
-              <select
-                className="w-full p-2 border rounded"
-                value={selectedRoutine || ""}
-                onChange={(e) => setSelectedRoutine(Number(e.target.value))}
-              >
-                <option value="">Select a routine</option>
-                {program.routines?.map((routine) => (
-                  <option key={routine.id} value={routine.id}>
-                    {routine.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedRoutine && (
-              <div className="space-y-4">
-                {program.routines
-                  ?.find((r) => r.id === selectedRoutine)
-                  ?.exercises.map((exercise) => (
-                    <Card key={exercise.id}>
-                      <CardContent className="pt-6">
-                        <h3 className="font-medium mb-2">{exercise.name}</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          {exercise.sets} sets × {exercise.reps} reps
-                        </p>
-                        {exercise.notes && (
-                          <p className="text-sm text-muted-foreground">
-                            Notes: {exercise.notes}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-              </div>
-            )}
-            <div>
-              <Label>Notes</Label>
-              <Textarea
-                value={logData.notes}
-                onChange={(e) => setLogData({ ...logData, notes: e.target.value })}
-                placeholder="Add any notes about your workout..."
-              />
-            </div>
-          </div>
-        );
-
+        return renderLiftingLog();
       case "diet":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Calories</Label>
-              <Input
-                type="number"
-                value={logData.calories}
-                onChange={(e) => setLogData({ ...logData, calories: e.target.value })}
-                placeholder="Enter total calories"
-              />
-            </div>
-            <div>
-              <Label>Protein (g)</Label>
-              <Input
-                type="number"
-                value={logData.protein}
-                onChange={(e) => setLogData({ ...logData, protein: e.target.value })}
-                placeholder="Enter protein in grams"
-              />
-            </div>
-            <div>
-              <Label>Carbs (g)</Label>
-              <Input
-                type="number"
-                value={logData.carbs}
-                onChange={(e) => setLogData({ ...logData, carbs: e.target.value })}
-                placeholder="Enter carbs in grams"
-              />
-            </div>
-            <div>
-              <Label>Fats (g)</Label>
-              <Input
-                type="number"
-                value={logData.fats}
-                onChange={(e) => setLogData({ ...logData, fats: e.target.value })}
-                placeholder="Enter fats in grams"
-              />
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Textarea
-                value={logData.notes}
-                onChange={(e) => setLogData({ ...logData, notes: e.target.value })}
-                placeholder="Add any notes about your meals..."
-              />
-            </div>
-          </div>
-        );
-
+        return renderMealLog();
       case "posing":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label>Session Notes</Label>
-              <Textarea
-                value={logData.notes}
-                onChange={(e) => setLogData({ ...logData, notes: e.target.value })}
-                placeholder="Add notes about your posing practice..."
-              />
-            </div>
-            {/* Add file upload for posing videos/photos in the next iteration */}
-          </div>
-        );
-
+        return renderPosingLog();
       default:
         return null;
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{program.name}</h1>
-          <p className="text-muted-foreground">{program.description}</p>
-        </div>
+    <div className="max-w-2xl mx-auto py-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">{program.name}</h1>
+        <p className="text-sm text-muted-foreground">{program.description}</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Log {program.type.charAt(0).toUpperCase() + program.type.slice(1)}</CardTitle>
+          <CardTitle>
+            Log {program.type === 'lifting' ? 'Lifting' : program.type === 'diet' ? 'Meal' : 'Posing'}
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <div className="p-6">
           {renderLogForm()}
-          <Button onClick={handleLogSubmit} className="mt-6">
-            Save Log
-          </Button>
-        </CardContent>
+        </div>
       </Card>
     </div>
   );
