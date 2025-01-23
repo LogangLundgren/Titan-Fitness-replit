@@ -508,15 +508,16 @@ export function registerRoutes(app: Express): Server {
   // Beta signup endpoint
   app.post("/api/beta-signup", async (req, res) => {
     try {
-      const { fullName, email } = req.body;
+      const { firstName, lastName, email } = req.body;
 
-      if (!fullName || !email) {
-        return res.status(400).send("Full name and email are required");
+      if (!firstName || !lastName || !email) {
+        return res.status(400).send("First name, last name, and email are required");
       }
 
       const signup = await db.insert(betaSignups)
         .values({
-          fullName,
+          firstName,
+          lastName,
           email,
         })
         .returning();

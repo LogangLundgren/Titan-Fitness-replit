@@ -8,7 +8,8 @@ export default function Landing() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     email: "",
   });
 
@@ -32,7 +33,7 @@ export default function Landing() {
         description: "Thanks for signing up! We'll be in touch soon.",
       });
 
-      setFormData({ fullName: "", email: "" });
+      setFormData({ firstName: "", lastName: "", email: "" });
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -57,10 +58,17 @@ export default function Landing() {
         <div className="max-w-2xl mx-auto mt-8">
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
             <Input 
-              placeholder="Enter your full name..." 
+              placeholder="Enter your first name..." 
               className="bg-[#1A2332] border-[#2A3343] text-white"
-              value={formData.fullName}
-              onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
+              value={formData.firstName}
+              onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+              required
+            />
+            <Input 
+              placeholder="Enter your last name..." 
+              className="bg-[#1A2332] border-[#2A3343] text-white"
+              value={formData.lastName}
+              onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
               required
             />
             <Input 
@@ -76,7 +84,11 @@ export default function Landing() {
               type="submit"
               disabled={isLoading}
             >
-              Get Access
+              {isLoading ? (
+                <>Loading...</>
+              ) : (
+                <>Get Access</>
+              )}
             </Button>
           </form>
         </div>

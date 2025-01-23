@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json, real, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, real } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
@@ -17,6 +17,7 @@ export const users = pgTable("users", {
   experience: text("experience"),
   socialLinks: jsonb("social_links").default('{}'),
   isPublicProfile: boolean("is_public_profile").default(true),
+  profilePictureUrl: text("profile_picture_url"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -31,6 +32,8 @@ export const programs = pgTable("programs", {
   updatedAt: timestamp("updated_at").defaultNow(),
   isPublic: boolean("is_public").default(false),
   programData: jsonb("program_data").default('{}'),
+  status: text("status"),
+  cycleLength: integer("cycle_length"),
 });
 
 export const routines = pgTable("routines", {
@@ -89,7 +92,8 @@ export const mealLogs = pgTable("meal_logs", {
 
 export const betaSignups = pgTable("beta_signups", {
   id: serial("id").primaryKey(),
-  fullName: text("full_name").notNull(),
+  firstName: text("first_name"),  // Making nullable initially
+  lastName: text("last_name"),    // Making nullable initially
   email: text("email").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
