@@ -22,19 +22,29 @@ export default function Programs() {
 
   const isCoach = user?.accountType === "coach";
 
-  // Use different endpoints based on user type
+  // Optimized query with proper key structure
   const { data: programs, isLoading } = useQuery<Program[] | ClientProgram[]>({
-    queryKey: [isCoach ? "/api/programs" : "/api/client/programs"],
+    queryKey: [isCoach ? "coach-programs" : "client-programs"],
+    staleTime: 30000, // Cache for 30 seconds
+    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
 
   const handleManageProgram = (programId: number) => {
     setLocation(`/programs/${programId}/manage`);
   };
 
+  // Loading state with skeleton UI
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-border" />
+      <div className="container py-6 space-y-6">
+        <div className="h-8 bg-muted rounded w-1/4"></div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse">
+              <div className="h-[200px] bg-muted rounded-lg"></div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

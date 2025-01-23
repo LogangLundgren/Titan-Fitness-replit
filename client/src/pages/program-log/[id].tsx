@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { queryClient } from "@/lib/queryClient";
 
 interface Program {
   id: number;
@@ -44,8 +45,11 @@ export default function ProgramLog() {
     fats: "",
   });
 
+  // Optimized query with proper key structure
   const { data: program, isLoading } = useQuery<Program>({
-    queryKey: [`/api/programs/${id}`],
+    queryKey: ["programs", id],
+    staleTime: 30000, // Cache for 30 seconds
+    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
 
   const handleSaveLog = async () => {
@@ -80,6 +84,9 @@ export default function ProgramLog() {
         description: "Log saved successfully",
       });
 
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ["programs", id] });
+
       // Reset form
       if (program.type === 'diet') {
         setMealData({
@@ -101,10 +108,37 @@ export default function ProgramLog() {
     }
   };
 
-  if (isLoading || !program) {
+  // Loading state with skeleton UI
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-border" />
+      <div className="max-w-2xl mx-auto py-6 space-y-6 animate-pulse">
+        <div className="h-8 bg-muted rounded w-1/3"></div>
+        <div className="h-4 bg-muted rounded w-2/3"></div>
+        <Card>
+          <CardHeader>
+            <div className="h-6 bg-muted rounded w-1/4"></div>
+          </CardHeader>
+          <div className="p-6 space-y-4">
+            <div className="h-10 bg-muted rounded"></div>
+            <div className="h-32 bg-muted rounded"></div>
+            <div className="h-10 bg-muted rounded"></div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!program) {
+    return (
+      <div className="max-w-2xl mx-auto py-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Program not found</CardTitle>
+          </CardHeader>
+          <div className="p-6">
+            <p className="text-muted-foreground">The program you're looking for doesn't exist or you don't have access to it.</p>
+          </div>
+        </Card>
       </div>
     );
   }
