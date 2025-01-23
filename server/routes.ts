@@ -18,6 +18,8 @@ export function registerRoutes(app: Express): Server {
       // If ID is provided, fetch specific program
       if (req.params.id) {
         const enrollmentId = parseInt(req.params.id);
+        console.log(`[Debug] Fetching program for enrollment ID: ${enrollmentId}`);
+
         const [enrollment] = await db.query.clientPrograms.findMany({
           where: and(
             eq(clientPrograms.id, enrollmentId),
@@ -28,9 +30,7 @@ export function registerRoutes(app: Express): Server {
               with: {
                 routines: {
                   with: {
-                    exercises: {
-                      orderBy: programExercises.orderInRoutine,
-                    },
+                    exercises: true,
                   },
                   orderBy: routines.orderInCycle,
                 }
@@ -39,6 +39,8 @@ export function registerRoutes(app: Express): Server {
           },
           limit: 1,
         });
+
+        console.log(`[Debug] Found enrollment:`, enrollment);
 
         if (!enrollment) {
           return res.status(404).json({
@@ -49,6 +51,8 @@ export function registerRoutes(app: Express): Server {
 
         // Transform the response to include client-specific data
         const program = enrollment.program;
+        console.log(`[Debug] Program routines:`, program.routines);
+
         const transformedProgram = {
           enrollmentId: enrollment.id,
           programId: program.id,
@@ -58,7 +62,7 @@ export function registerRoutes(app: Express): Server {
           startDate: enrollment.startDate,
           active: enrollment.active,
           version: enrollment.version,
-          routines: enrollment.clientProgramData?.customizations?.routines || program.routines,
+          routines: program.routines,
           progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
         };
 
