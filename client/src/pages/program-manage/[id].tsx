@@ -26,6 +26,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import type { Program } from "@db/schema";
@@ -65,6 +75,7 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [program, setProgram] = useState<Program | null>(null);
   const [workoutDays, setWorkoutDays] = useState<WorkoutDay[]>([]);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
@@ -231,6 +242,38 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
     }
   };
 
+  const handleDelete = async () => {
+    try {
+      setIsSubmitting(true);
+      setShowDeleteDialog(false);
+
+      const response = await fetch(`/api/programs/${params.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      toast({
+        title: "Success",
+        description: "Program deleted successfully",
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["/api/programs"] });
+      setLocation("/programs");
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoading || !program) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -243,9 +286,17 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
     <div className="container py-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Manage Program</h1>
-        <Button onClick={() => setShowConfirmDialog(true)} disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save Changes
+        <Button
+          variant="destructive"
+          onClick={() => setShowDeleteDialog(true)}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="mr-2 h-4 w-4" />
+          )}
+          Delete Program
         </Button>
       </div>
 
@@ -298,7 +349,6 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
           </CardContent>
         </Card>
 
-        {/* Program type-specific content */}
         {program.type === "lifting" && (
           <div className="space-y-4">
             {workoutDays.map((day, dayIndex) => (
@@ -610,6 +660,15 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
         )}
       </div>
 
+      {/* Move save button to bottom */}
+      <div className="flex justify-end">
+        <Button onClick={() => setShowConfirmDialog(true)} disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save Changes
+        </Button>
+      </div>
+
+      {/* Save confirmation dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent>
           <DialogHeader>
@@ -629,6 +688,30 @@ export default function ManageProgram({ params }: { params: { id: string } }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Program</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this program? This action cannot be undone.
+              All enrolled clients will lose access to this program.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete Program
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

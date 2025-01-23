@@ -22,11 +22,9 @@ export default function Programs() {
 
   const isCoach = user?.accountType === "coach";
 
-  // Optimized query with proper key structure
+  // Update query key to match API endpoints
   const { data: programs, isLoading } = useQuery<Program[] | ClientProgram[]>({
-    queryKey: [isCoach ? "coach-programs" : "client-programs"],
-    staleTime: 30000, // Cache for 30 seconds
-    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    queryKey: [`/api/${isCoach ? 'programs' : 'client/programs'}`],
   });
 
   const handleManageProgram = (programId: number) => {
@@ -60,7 +58,7 @@ export default function Programs() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {programs?.map((program) => {
           // Properly type assert the program based on user type
-          const key = isCoach ? program.id : (program as ClientProgram).id;
+          const key = isCoach ? program.id : (program as ClientProgram).enrollmentId;
           return (
             <ProgramCard
               key={key}

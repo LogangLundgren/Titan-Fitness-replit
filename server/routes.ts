@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
 import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups, users, routines, programExercises } from "@db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -448,11 +448,11 @@ export function registerRoutes(app: Express): Server {
           active: enrollment.active,
           version: enrollment.version,
           routines: enrollment.clientProgramData?.customizations?.routines || program.routines,
-          mealPlans: program.type === 'diet' ? 
-            enrollment.clientProgramData?.customizations?.mealPlans || program.programData?.mealPlans : 
+          mealPlans: program.type === 'diet' ?
+            enrollment.clientProgramData?.customizations?.mealPlans || program.programData?.mealPlans :
             undefined,
-          posingDetails: program.type === 'posing' ? 
-            enrollment.clientProgramData?.customizations?.posingDetails || program.programData?.posingDetails : 
+          posingDetails: program.type === 'posing' ?
+            enrollment.clientProgramData?.customizations?.posingDetails || program.programData?.posingDetails :
             undefined,
           progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
         };
@@ -736,6 +736,65 @@ export function registerRoutes(app: Express): Server {
 
       res.json(updatedProfile);
     } catch (error: any) {
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Delete program endpoint
+  app.delete("/api/programs/:id", async (req, res) => {
+    if (!req.user?.accountType === "coach") {
+      return res.status(403).send("Only coaches can delete programs");
+    }
+
+    try {
+      const programId = parseInt(req.params.id);
+
+      // Check if the program exists and belongs to this coach
+      const [program] = await db.query.programs.findMany({
+        where: and(
+          eq(programs.id, programId),
+          eq(programs.coachId, req.user.id)
+        ),
+        limit: 1
+      });
+
+      if (!program) {
+        return res.status(404).send("Program not found or you don't have permission to delete it");
+      }
+
+      // Delete program and all related data
+      await db.transaction(async (tx) => {
+        // Delete program exercises
+        await tx
+          .delete(programExercises)
+          .where(
+            inArray(
+              programExercises.routineId,
+              db.select({ id: routines.id })
+                .from(routines)
+                .where(eq(routines.programId, programId))
+            )
+          );
+
+        // Delete routines
+        await tx
+          .delete(routines)
+          .where(eq(routines.programId, programId));
+
+        // Delete client enrollments
+        await tx
+          .delete(clientPrograms)
+          .where(eq(clientPrograms.programId, programId));
+
+        // Finally delete the program
+        await tx
+          .delete(programs)
+          .where(eq(programs.id, programId));
+      });
+
+      res.json({ message: "Program deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting program:", error);
       res.status(500).send(error.message);
     }
   });
