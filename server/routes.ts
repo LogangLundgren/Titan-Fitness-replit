@@ -30,7 +30,26 @@ export function registerRoutes(app: Express): Server {
               with: {
                 routines: {
                   with: {
-                    exercises: true,
+                    exercises: {
+                      columns: {
+                        id: true,
+                        name: true,
+                        description: true,
+                        sets: true,
+                        reps: true,
+                        restTime: true,
+                        notes: true,
+                        orderInRoutine: true,
+                      },
+                      orderBy: programExercises.orderInRoutine,
+                    },
+                  },
+                  columns: {
+                    id: true,
+                    name: true,
+                    dayOfWeek: true,
+                    notes: true,
+                    orderInCycle: true,
                   },
                   orderBy: routines.orderInCycle,
                 }
@@ -41,6 +60,8 @@ export function registerRoutes(app: Express): Server {
         });
 
         console.log(`[Debug] Found enrollment:`, enrollment);
+        console.log(`[Debug] Program:`, enrollment?.program);
+        console.log(`[Debug] Routines:`, enrollment?.program?.routines);
 
         if (!enrollment) {
           return res.status(404).json({
@@ -51,12 +72,10 @@ export function registerRoutes(app: Express): Server {
 
         // Transform the response to include client-specific data
         const program = enrollment.program;
-        console.log(`[Debug] Program routines:`, program.routines);
-
         const transformedProgram = {
           enrollmentId: enrollment.id,
           programId: program.id,
-          name: enrollment.clientProgramData?.customizations?.name || program.name,
+          name: program.name,
           description: program.description,
           type: program.type,
           startDate: enrollment.startDate,
