@@ -5,7 +5,6 @@ import {
   HomeIcon, 
   ShoppingBagIcon, 
   LayoutDashboardIcon,
-  UtensilsIcon,
   UserIcon,
   LogOutIcon
 } from "lucide-react";
@@ -34,10 +33,6 @@ export function Navbar() {
               <Link href="/programs" className="flex items-center gap-2 text-sm font-medium">
                 <LayoutDashboardIcon className="h-4 w-4" />
                 Programs
-              </Link>
-              <Link href="/meal-log" className="flex items-center gap-2 text-sm font-medium">
-                <UtensilsIcon className="h-4 w-4" />
-                Meal Log
               </Link>
               <Link href="/profile" className="flex items-center gap-2 text-sm font-medium">
                 <UserIcon className="h-4 w-4" />

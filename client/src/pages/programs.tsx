@@ -1,47 +1,31 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { ProgramCard } from "@/components/programs/program-card";
-import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/use-user";
 import type { Program } from "@db/schema";
 import { useLocation } from "wouter";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { useState } from "react";
+
+interface ClientProgram extends Program {
+  enrollmentId: number;
+  startDate: string;
+  active: boolean;
+  version: number;
+  progress?: {
+    completed: string[];
+    notes: string[];
+  };
+}
 
 export default function Programs() {
   const { user } = useUser();
   const [location, setLocation] = useLocation();
-  const [isSelectingType, setIsSelectingType] = useState(false);
-  const [selectedType, setSelectedType] = useState<string>("");
-
-  const { data: programs, isLoading } = useQuery<Program[]>({
-    queryKey: ["/api/programs"],
-  });
 
   const isCoach = user?.accountType === "coach";
-  const userPrograms = programs?.filter(p =>
-    isCoach ? p.coachId === user.id : p.clientId === user.id
-  );
 
-  const handleCreateProgram = () => {
-    if (!selectedType) return;
-
-    setIsSelectingType(false);
-    setLocation(`/programs/create/${selectedType}`);
-  };
+  // Use different endpoints based on user type
+  const { data: programs, isLoading } = useQuery<Program[] | ClientProgram[]>({
+    queryKey: [isCoach ? "/api/programs" : "/api/client/programs"],
+  });
 
   const handleManageProgram = (programId: number) => {
     setLocation(`/programs/${programId}/manage`);
@@ -56,62 +40,24 @@ export default function Programs() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="container py-6 space-y-6">
+      <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">
-          {isCoach ? "My Programs" : "Enrolled Programs"}
+          {isCoach ? "My Programs" : "My Enrolled Programs"}
         </h1>
-
-        {isCoach && (
-          <Dialog open={isSelectingType} onOpenChange={setIsSelectingType}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Program
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Select Program Type</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <Select
-                  value={selectedType}
-                  onValueChange={(value) => setSelectedType(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select program type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lifting">Strength Training</SelectItem>
-                    <SelectItem value="diet">Nutrition Plan</SelectItem>
-                    <SelectItem value="posing">Posing Coaching</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button 
-                  className="w-full" 
-                  onClick={handleCreateProgram}
-                  disabled={!selectedType}
-                >
-                  Continue
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {userPrograms?.map((program) => (
+        {programs?.map((program) => (
           <ProgramCard
-            key={program.id}
+            key={isCoach ? program.id : (program as ClientProgram).enrollmentId}
             program={program}
             showManageButton={isCoach}
-            onManage={() => handleManageProgram(program.id)}
+            onManage={isCoach ? () => handleManageProgram(program.id) : undefined}
           />
         ))}
 
-        {userPrograms?.length === 0 && (
+        {(!programs || programs.length === 0) && (
           <div className="col-span-full text-center py-12">
             <h3 className="text-lg font-medium">
               {isCoach ? "No programs created" : "No programs enrolled"}

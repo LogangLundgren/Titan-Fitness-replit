@@ -1,0 +1,86 @@
+Based on the updated issue, here are the files and areas you should focus on:
+
+Files to Investigate:
+API Logic: Backend Endpoint
+
+File Name: The backend file that handles the GET /api/client/programs endpoint.
+Purpose: This is responsible for querying the client_programs table and returning the list of enrolled programs for the logged-in client.
+What to Check:
+Query correctness: Does it filter by client_id?
+Ensure it fetches all relevant details (e.g., program name, type, and details from related tables).
+Example:
+
+If using Express.js: Look for a route like:
+javascript
+Copy
+Edit
+app.get("/api/client/programs", (req, res) => {
+  // Database query to fetch programs
+});
+If using a framework like Next.js, check the api/client/programs.js or similar file.
+Database Query Layer
+
+File Name: If the database queries are abstracted in a separate file/module, look for the function responsible for querying client_programs.
+What to Check:
+Does the query correctly join client_programs with the programs table to fetch program details?
+Ensure no filters unintentionally exclude programs.
+Example Query:
+
+sql
+Copy
+Edit
+SELECT cp.*, p.name, p.type, p.description
+FROM client_programs cp
+JOIN programs p ON cp.program_id = p.id
+WHERE cp.client_id = 1;
+Frontend: Data Fetching
+File Name: The file or component that fetches programs for the client.
+Common Names:
+programs.js (or equivalent) under pages, api, or hooks.
+A React hook like useClientPrograms.
+What to Check:
+Verify the API call correctly points to the /api/client/programs endpoint.
+Example:
+javascript
+Copy
+Edit
+const { data: programs } = useQuery(["clientPrograms"], fetchClientPrograms);
+Ensure the response from the API matches the expected data structure.
+Frontend: Programs Tab
+File Name: The React component responsible for rendering the "Programs" tab for clients.
+Common Names:
+ClientPrograms.js or ProgramsTab.js.
+Could also be within the Dashboard component for clients.
+What to Check:
+Ensure the component properly renders the data fetched from the API.
+Example:
+javascript
+Copy
+Edit
+programs.map((program) => (
+  <Card key={program.id}>
+    <CardContent>
+      <h2>{program.name}</h2>
+    </CardContent>
+  </Card>
+));
+Frontend: Global Navigation Bar
+File Name: The React component rendering the navigation bar.
+Common Names: Navbar.js, GlobalNavigation.js.
+What to Check:
+Remove the "Meal Log" link or button but keep the page accessible elsewhere.
+Suggested Debugging Steps:
+Verify API Response:
+
+Use Postman or a similar tool to test the /api/client/programs endpoint.
+Ensure it returns the correct list of programs for client_id = 1.
+Inspect the Frontend Fetch Logic:
+
+Add console logs to check if the data is being fetched correctly and passed to the component.
+Inspect Rendering Logic:
+
+Add logs or debug points in the "Programs" tab component to see if the data is being passed down to the card rendering logic.
+Fix the Global Navigation Bar:
+
+Remove the "Meal Log" link by commenting it out or conditionally rendering it only for specific roles (e.g., coach).
+Let me know if you'd like help analyzing specific files or writing debugging logs.
