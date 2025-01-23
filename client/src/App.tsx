@@ -8,7 +8,6 @@ import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Marketplace from "@/pages/marketplace";
 import Programs from "@/pages/programs";
-import MealLog from "@/pages/meal-log";
 import Profile from "@/pages/profile";
 import { useUser } from "@/hooks/use-user";
 import { Loader2 } from "lucide-react";
@@ -17,6 +16,7 @@ import CreateLiftingProgram from "@/pages/program-create/lifting";
 import CreateDietProgram from "@/pages/program-create/diet";
 import CreatePosingProgram from "@/pages/program-create/posing";
 import ManageProgram from "@/pages/program-manage/[id]";
+import ProgramLog from "@/pages/program-log/[id]";
 
 function Router() {
   const { user, isLoading } = useUser();
@@ -50,7 +50,7 @@ function Router() {
           <Route path="/programs/create/diet" component={CreateDietProgram} />
           <Route path="/programs/create/posing" component={CreatePosingProgram} />
           <Route path="/programs/:id/manage" component={ManageProgram} />
-          <Route path="/meal-log" component={MealLog} />
+          <Route path="/programs/:id/log" component={ProgramLog} />
           <Route path="/profile" component={Profile} />
           <Route component={NotFound} />
         </Switch>

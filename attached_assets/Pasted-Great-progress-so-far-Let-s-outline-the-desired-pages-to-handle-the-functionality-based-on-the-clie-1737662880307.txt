@@ -1,0 +1,84 @@
+Great progress so far! Let’s outline the desired pages to handle the functionality based on the client, program type, and specific program. These descriptions will help ensure we implement the right functionality.
+
+Desired Pages
+1. Program Overview Page
+URL: /programs/:programId/overview
+Purpose: Display the program's high-level details for the client, including:
+Program name
+Description
+Type (Strength Training, Nutrition Plan, Posing Coaching)
+Coach details (optional)
+Progress summary
+Actions Available:
+Navigate to specific logging pages (e.g., "Log Workouts" or "Log Meals").
+View program routines or meal plans in a read-only mode.
+Components to Include:
+ProgramHeader (Title, Description, Type)
+ProgressSummary (e.g., % completed, recent logs)
+Navigation Buttons (to respective log pages)
+2. Workout Logging Page
+URL: /programs/:programId/log/workout
+Purpose: Allow the client to log workouts for the program.
+Functionality:
+Display routines specific to the program.
+Show exercises for the selected routine.
+Allow input for:
+Completed sets and reps
+Notes or feedback for the routine
+Submit the log to the backend for saving.
+Components to Include:
+RoutineSelector (Dropdown or Tabs for selecting a routine)
+ExerciseList (Displays exercises in the routine)
+LogForm (Inputs for sets, reps, and notes)
+SaveButton (Saves log data)
+3. Meal Logging Page
+URL: /programs/:programId/log/meal
+Purpose: Allow the client to log meal data for the program.
+Functionality:
+Display meal plan details (e.g., target calories, macros).
+Allow input for:
+Calories consumed
+Macronutrients (protein, carbs, fats)
+Additional notes (e.g., food type, time of day).
+Submit the log to the backend for saving.
+Components to Include:
+MealPlanOverview (Displays target macros and goals)
+LogForm (Inputs for calories, macros, and notes)
+SaveButton (Saves log data)
+4. Posing Feedback Page
+URL: /programs/:programId/log/posing
+Purpose: Allow the client to upload posing videos/images and provide feedback.
+Functionality:
+Upload posing videos or images.
+Provide notes or comments for the coach to review.
+Submit the log to the backend for saving.
+Components to Include:
+UploadField (For videos or images)
+LogForm (Inputs for notes or feedback)
+SaveButton (Saves log data)
+5. Progress Page
+URL: /programs/:programId/progress
+Purpose: Display progress for the program.
+Functionality:
+Visualize client progress (e.g., completed routines, logged workouts/meals).
+Allow clients to review past logs.
+Summarize stats (e.g., average calories, weekly workout volume).
+Components to Include:
+ProgressGraph (Charts for workout/meal progress)
+LogHistory (List of past logs with details)
+StatsSummary (Quick stats for workouts/meals)
+Suggested Navigation
+Each program card should allow navigation to:
+
+Overview Page: /programs/:programId/overview
+Log Pages: Depending on the type:
+Workout Logging: /programs/:programId/log/workout
+Meal Logging: /programs/:programId/log/meal
+Posing Feedback: /programs/:programId/log/posing
+Progress Page: /programs/:programId/progress
+Next Steps
+Fix the 404: Ensure routes are registered properly on the frontend and backend for all necessary pages.
+Frontend: Update React Router or routing mechanism to handle these paths.
+Backend: Ensure API endpoints support fetching data for these routes.
+Implement Page Skeletons: Start with basic layouts for each page and test navigation.
+Connect Backend: Ensure each page dynamically fetches and displays program-specific data.
