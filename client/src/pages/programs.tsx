@@ -48,14 +48,19 @@ export default function Programs() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {programs?.map((program) => (
-          <ProgramCard
-            key={isCoach ? program.id : (program as ClientProgram).enrollmentId}
-            program={program}
-            showManageButton={isCoach}
-            onManage={isCoach ? () => handleManageProgram(program.id) : undefined}
-          />
-        ))}
+        {programs?.map((program) => {
+          // Properly type assert the program based on user type
+          const key = isCoach ? program.id : (program as ClientProgram).id;
+          return (
+            <ProgramCard
+              key={key}
+              program={program}
+              showManageButton={isCoach}
+              showEnrollButton={false}
+              onManage={isCoach ? () => handleManageProgram(program.id) : undefined}
+            />
+          );
+        })}
 
         {(!programs || programs.length === 0) && (
           <div className="col-span-full text-center py-12">

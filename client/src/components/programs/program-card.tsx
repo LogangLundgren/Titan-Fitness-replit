@@ -7,8 +7,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/hooks/use-user";
 import type { Program } from "@db/schema";
 import { DumbbellIcon, UtensilsIcon, CameraIcon } from "lucide-react";
+import { useLocation } from "wouter";
 
 const PROGRAM_ICONS = {
   lifting: DumbbellIcon,
@@ -30,6 +32,8 @@ export function ProgramCard({
   onManage,
 }: ProgramCardProps) {
   const { toast } = useToast();
+  const { user } = useUser();
+  const [, setLocation] = useLocation();
   const Icon = PROGRAM_ICONS[program.type as keyof typeof PROGRAM_ICONS] || DumbbellIcon;
 
   const handleEnroll = async () => {
@@ -56,6 +60,14 @@ export function ProgramCard({
     }
   };
 
+  const handleCardClick = () => {
+    if (!user) return;
+
+    if (user.accountType === "client") {
+      setLocation(`/programs/${program.id}/log`);
+    }
+  };
+
   const getProgramTypeLabel = (type: string) => {
     switch (type) {
       case "lifting":
@@ -70,7 +82,10 @@ export function ProgramCard({
   };
 
   return (
-    <Card>
+    <Card 
+      className={user?.accountType === "client" ? "cursor-pointer hover:shadow-md transition-shadow" : undefined}
+      onClick={handleCardClick}
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -92,12 +107,21 @@ export function ProgramCard({
           </div>
           <div className="flex gap-2">
             {showEnrollButton && (
-              <Button onClick={handleEnroll}>
+              <Button onClick={(e) => {
+                e.stopPropagation();
+                handleEnroll();
+              }}>
                 Enroll Now
               </Button>
             )}
             {showManageButton && onManage && (
-              <Button variant="outline" onClick={() => onManage(program.id)}>
+              <Button 
+                variant="outline" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onManage(program.id);
+                }}
+              >
                 Manage
               </Button>
             )}
