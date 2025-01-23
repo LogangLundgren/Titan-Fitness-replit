@@ -543,7 +543,7 @@ export function registerRoutes(app: Express): Server {
 
       // Return the transformed program data
       const transformedEnrollment = {
-        id: enrollment.id,
+        enrollmentId: enrollment.id,
         programId: program.id,
         name: program.name,
         description: program.description,

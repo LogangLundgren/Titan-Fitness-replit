@@ -18,8 +18,19 @@ const PROGRAM_ICONS = {
   posing: CameraIcon,
 } as const;
 
+interface ClientProgram extends Program {
+  enrollmentId: number;
+  programId: number;
+  startDate: string;
+  active: boolean;
+  progress?: {
+    completed: string[];
+    notes: string[];
+  };
+}
+
 interface ProgramCardProps {
-  program: Program;
+  program: Program | ClientProgram;
   showEnrollButton?: boolean;
   showManageButton?: boolean;
   onManage?: (programId: number) => void;
@@ -35,6 +46,9 @@ export function ProgramCard({
   const { user } = useUser();
   const [, setLocation] = useLocation();
   const Icon = PROGRAM_ICONS[program.type as keyof typeof PROGRAM_ICONS] || DumbbellIcon;
+
+  // Check if program is a client program
+  const isClientProgram = 'enrollmentId' in program;
 
   const handleEnroll = async () => {
     try {
@@ -63,8 +77,8 @@ export function ProgramCard({
   const handleCardClick = () => {
     if (!user) return;
 
-    if (user.accountType === "client") {
-      setLocation(`/programs/${program.id}/log`);
+    if (user.accountType === "client" && isClientProgram) {
+      setLocation(`/programs/${(program as ClientProgram).enrollmentId}/log`);
     }
   };
 
