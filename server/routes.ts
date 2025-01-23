@@ -750,6 +750,92 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Enhanced program enrollment with program copy
+  app.post("/api/programs/:id/enroll", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const programId = parseInt(req.params.id);
+
+      // Check if already enrolled
+      const existingEnrollment = await db.query.clientPrograms.findFirst({
+        where: and(
+          eq(clientPrograms.clientId, req.user.id),
+          eq(clientPrograms.programId, programId),
+          eq(clientPrograms.active, true)
+        ),
+      });
+
+      if (existingEnrollment) {
+        return res.status(400).json({
+          error: "Already enrolled",
+          message: "You are already enrolled in this program"
+        });
+      }
+
+      // Fetch the original program with all its data
+      const [program] = await db.query.programs.findMany({
+        where: eq(programs.id, programId),
+        with: {
+          routines: {
+            with: {
+              exercises: {
+                orderBy: programExercises.orderInRoutine,
+              },
+            },
+            orderBy: routines.orderInCycle,
+          }
+        },
+        limit: 1,
+      });
+
+      if (!program) {
+        return res.status(404).json({
+          error: "Program not found",
+          message: "The requested program does not exist"
+        });
+      }
+
+      // Create the enrollment with the copied data
+      const [enrollment] = await db.insert(clientPrograms)
+        .values({
+          clientId: req.user.id,
+          programId: program.id,
+          startDate: new Date(),
+          active: true,
+          version: 1,
+          clientProgramData: {
+            progress: { completed: [], notes: [] }
+          }
+        })
+        .returning();
+
+      // Return the transformed program data
+      const transformedEnrollment = {
+        enrollmentId: enrollment.id,
+        programId: program.id,
+        name: program.name,
+        description: program.description,
+        type: program.type,
+        startDate: enrollment.startDate,
+        active: enrollment.active,
+        version: enrollment.version,
+        routines: program.routines || [],
+        progress: { completed: [], notes: [] },
+      };
+
+      res.json(transformedEnrollment);
+    } catch (error: any) {
+      console.error("Error enrolling in program:", error);
+      res.status(500).json({
+        error: "Enrollment failed",
+        details: error.message
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
