@@ -722,26 +722,39 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      const workoutLogs = await db.query.workoutLogs.findMany({
+      console.log(`[Debug] Fetching workout history for program ${req.params.programId} and user ${req.user.id}`);
+
+      const logs = await db.query.workoutLogs.findMany({
         where: and(
           eq(workoutLogs.clientProgramId, parseInt(req.params.programId)),
           eq(workoutLogs.clientId, req.user.id)
         ),
         orderBy: [desc(workoutLogs.date)],
         with: {
-          routine: true
+          routine: {
+            with: {
+              exercises: true
+            }
+          }
         }
       });
 
-      const formattedLogs = workoutLogs.map(log => ({
+      console.log(`[Debug] Found ${logs.length} workout logs`);
+      console.log('[Debug] Sample log:', logs[0]);
+
+      const formattedLogs = logs.map(log => ({
         id: log.id,
         date: log.date,
         routineId: log.routineId,
         routineName: log.routine?.name || 'Unknown Routine',
-        data: log.data,
+        exercises: log.data?.exerciseLogs || [],
+        volume: log.data?.exerciseLogs?.reduce((total, ex) =>
+          total + (ex.sets?.reduce((setTotal, set) =>
+            setTotal + (parseInt(set.weight) * parseInt(set.reps)), 0) || 0), 0) || 0,
         notes: log.data?.notes
       }));
 
+      console.log('[Debug] First formatted log:', formattedLogs[0]);
       res.json(formattedLogs);
     } catch (error: any) {
       console.error("Error fetching workout history:", error);
@@ -756,7 +769,9 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      const mealLogs = await db.query.mealLogs.findMany({
+      console.log(`[Debug] Fetching meal history for program ${req.params.programId} and user ${req.user.id}`);
+
+      const logs = await db.query.mealLogs.findMany({
         where: and(
           eq(mealLogs.clientProgramId, parseInt(req.params.programId)),
           eq(mealLogs.clientId, req.user.id)
@@ -764,7 +779,10 @@ export function registerRoutes(app: Express): Server {
         orderBy: [desc(mealLogs.date)]
       });
 
-      const formattedLogs = mealLogs.map(log => ({
+      console.log(`[Debug] Found ${logs.length} meal logs`);
+      console.log('[Debug] Sample log:', logs[0]);
+
+      const formattedLogs = logs.map(log => ({
         id: log.id,
         date: log.date,
         calories: log.calories || 0,
@@ -775,6 +793,7 @@ export function registerRoutes(app: Express): Server {
         data: log.data
       }));
 
+      console.log('[Debug] First formatted log:', formattedLogs[0]);
       res.json(formattedLogs);
     } catch (error: any) {
       console.error("Error fetching meal history:", error);
