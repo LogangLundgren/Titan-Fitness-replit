@@ -766,19 +766,41 @@ export function registerRoutes(app: Express): Server {
         where: eq(programs.id, parseInt(req.params.programId)),
         with: {
           routines: {
+            with: {
+              exercises: {
+                orderBy: programExercises.orderInRoutine,
+                columns: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  sets: true,
+                  reps: true,
+                  restTime: true,
+                  notes: true,
+                  orderInRoutine: true,
+                }
+              },
+            },
             columns: {
               id: true,
-              name: true
+              name: true,
+              dayOfWeek: true,
+              notes: true,
+              orderInCycle: true,
             }
           }
         },
         limit: 1
       });
 
+      console.log(`[Debug] Found program:`, program);
+      console.log(`[Debug] Routines:`, program?.routines);
+
+      // Create maps for quick lookups
       const routineMap = program?.routines.reduce((acc, routine) => {
-        acc[routine.id] = routine.name;
+        acc[routine.id] = routine;
         return acc;
-      }, {} as Record<number, string>);
+      }, {} as Record<number, any>);
 
       const logs = await db.query.workoutLogs.findMany({
         where: and(
@@ -797,20 +819,31 @@ export function registerRoutes(app: Express): Server {
       console.log(`[Debug] Found ${logs.length} workout logs`);
       console.log('[Debug] Sample log:', logs[0]);
 
-      const formattedLogs = logs.map(log => ({
-        id: log.id,
-        date: log.date,
-        routineId: log.routineId,
-        routineName: routineMap[log.routineId] || 'Unknown Routine',
-        exercises: log.data?.exerciseLogs?.map((ex: any) => ({
-          name: ex.name,
-          sets: ex.sets.map((set: any) => ({
-            weight: parseInt(set.weight || '0'),
-            reps: parseInt(set.reps || '0')
-          }))
-        })) || [],
-        notes: log.data?.notes
-      }));
+      const formattedLogs = logs.map(log => {
+        const routine = routineMap[log.routineId];
+        const exerciseMap = routine?.exercises.reduce((acc: Record<number, any>, ex: any) => {
+          acc[ex.id] = ex;
+          return acc;
+        }, {});
+
+        return {
+          id: log.id,
+          date: log.date,
+          routineId: log.routineId,
+          routineName: routine?.name || 'Unknown Routine',
+          exercises: log.data?.exerciseLogs?.map((ex: any) => {
+            const programExercise = exerciseMap[ex.exerciseId];
+            return {
+              name: programExercise?.name || 'Unknown Exercise',
+              sets: ex.sets.map((set: any) => ({
+                weight: parseInt(set.weight || '0'),
+                reps: parseInt(set.reps || '0')
+              }))
+            };
+          }) || [],
+          notes: log.data?.notes
+        };
+      });
 
       console.log('[Debug] First formatted log:', formattedLogs[0]);
       res.json(formattedLogs);
