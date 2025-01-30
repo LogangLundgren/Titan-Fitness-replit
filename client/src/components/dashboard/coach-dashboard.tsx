@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCard } from "./stats-card";
 import { Users, Target, MessageSquare } from "lucide-react";
+import { ProgramAnalytics } from "../analytics/program-analytics";
 import type { User } from "@db/schema";
 
 interface ClientData {
@@ -99,7 +100,21 @@ export function CoachDashboard() {
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
                 <TabsTrigger value="messages">Messages</TabsTrigger>
               </TabsList>
-              {/* Tab contents will be implemented in the next iteration */}
+              <TabsContent value="analytics">
+                <ProgramAnalytics clientId={selectedClient} />
+              </TabsContent>
+              <TabsContent value="progress">
+                <div className="py-4">
+                  <h3 className="text-lg font-medium">Progress Overview</h3>
+                  {/* Progress content will be implemented next */}
+                </div>
+              </TabsContent>
+              <TabsContent value="messages">
+                <div className="py-4">
+                  <h3 className="text-lg font-medium">Messages</h3>
+                  {/* Messages content will be implemented next */}
+                </div>
+              </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
