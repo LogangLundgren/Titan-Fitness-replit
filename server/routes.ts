@@ -654,6 +654,94 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Add PUT endpoint for updating workout logs
+  app.put("/api/workouts/:id", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const logId = parseInt(req.params.id);
+      const { data } = req.body;
+
+      // First verify the workout log belongs to this user
+      const [workoutLog] = await db.query.workoutLogs.findMany({
+        where: and(
+          eq(workoutLogs.id, logId),
+          eq(workoutLogs.clientId, req.user.id)
+        ),
+        with: {
+          clientProgram: {
+            with: {
+              program: {
+                with: {
+                  routines: {
+                    with: {
+                      exercises: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        limit: 1
+      });
+
+      if (!workoutLog) {
+        return res.status(404).json({
+          error: "Workout log not found",
+          message: "The requested workout log does not exist or you don't have access to it"
+        });
+      }
+
+      // Get the routine and exercise information
+      const routine = workoutLog.clientProgram?.program?.routines.find(r => r.id === workoutLog.routineId);
+      if (!routine) {
+        return res.status(404).send("Routine not found");
+      }
+
+      // Create exercise map for validation and name lookup
+      const exerciseMap = new Map(
+        routine.exercises.map(ex => [ex.id, ex])
+      );
+
+      // Validate and transform exercise logs
+      const exerciseLogs = data.exerciseLogs.map((log: any) => {
+        const exercise = exerciseMap.get(log.exerciseId);
+        return {
+          exerciseId: log.exerciseId,
+          exerciseName: exercise?.name || 'Unknown Exercise',
+          sets: log.sets.map((set: any) => ({
+            weight: set.weight,
+            reps: set.reps
+          }))
+        };
+      });
+
+      // Update the workout log
+      const [updatedLog] = await db
+        .update(workoutLogs)
+        .set({
+          data: {
+            exerciseLogs,
+            routineName: routine.name,
+            notes: data.notes
+          }
+        })
+        .where(and(
+          eq(workoutLogs.id, logId),
+          eq(workoutLogs.clientId, req.user.id)
+        ))
+        .returning();
+
+      res.json(updatedLog);
+    } catch (error: any) {
+      console.error("Error updating workout log:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
   // Add meal logging endpoints after the workout logging endpoint
   // Meal logging
   app.post("/api/meals", async (req, res) => {
@@ -812,7 +900,7 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Get workout history for a specific program
+  // Fix the GET endpoint to properly include routine and exercise names
   app.get("/api/workouts/:programId", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
@@ -820,6 +908,41 @@ export function registerRoutes(app: Express): Server {
 
     try {
       console.log(`[Debug] Fetching workout history for program ${req.params.programId} and user ${req.user.id}`);
+
+      // Get the program details first to have access to routine and exercise names
+      const [enrollment] = await db.query.clientPrograms.findMany({
+        where: eq(clientPrograms.id, parseInt(req.params.programId)),
+        with: {
+          program: {
+            with: {
+              routines: {
+                with: {
+                  exercises: {
+                    orderBy: programExercises.orderInRoutine,
+                  }
+                },
+                orderBy: routines.orderInCycle,
+              }
+            }
+          }
+        }
+      });
+
+      if (!enrollment) {
+        return res.status(404).send("Program enrollment not found");
+      }
+
+      // Create maps for quick lookups
+      const routineMap = new Map(
+        enrollment.program?.routines.map(r => [r.id, r]) || []
+      );
+
+      const exerciseMap = new Map();
+      enrollment.program?.routines.forEach(routine => {
+        routine.exercises.forEach(exercise => {
+          exerciseMap.set(exercise.id, exercise);
+        });
+      });
 
       // Fetch workout logs with sorting by date descending
       const logs = await db.query.workoutLogs.findMany({
@@ -842,21 +965,25 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Format logs using the stored routine name and exercise data
-      const formattedLogs = logs.map(log => ({
-        id: log.id,
-        date: log.date,
-        routineId: log.routineId,
-        routineName: log.data?.routineName || 'Unknown Routine',
-        exercises: (log.data?.exerciseLogs || []).map((ex: any) => ({
-          name: ex.exerciseName || 'Unknown Exercise',
-          sets: ex.sets.map((set: any) => ({
-            weight: parseInt(set.weight || '0'),
-            reps: parseInt(set.reps || '0')
-          }))
-        })),
-        notes: log.data?.notes || '',
-        canDelete: true // Add this flag to enable delete functionality
-      }));
+      const formattedLogs = logs.map(log => {
+        const routine = routineMap.get(log.routineId);
+        return {
+          id: log.id,
+          date: log.date,
+          routineId: log.routineId,
+          routineName: routine?.name || log.data?.routineName || 'Unknown Routine',
+          exercises: (log.data?.exerciseLogs || []).map((ex: any) => ({
+            name: exerciseMap.get(ex.exerciseId)?.name || ex.exerciseName || 'Unknown Exercise',
+            sets: ex.sets.map((set: any) => ({
+              weight: parseInt(set.weight || '0'),
+              reps: parseInt(set.reps || '0')
+            }))
+          })),
+          notes: log.data?.notes || '',
+          canDelete: true,
+          canEdit: true
+        };
+      });
 
       console.log('[Debug] First formatted log:', JSON.stringify(formattedLogs[0], null, 2));
       res.json(formattedLogs);
