@@ -761,6 +761,25 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log(`[Debug] Fetching workout history for program ${req.params.programId} and user ${req.user.id}`);
 
+      // First get the routine information for this program
+      const [program] = await db.query.programs.findMany({
+        where: eq(programs.id, parseInt(req.params.programId)),
+        with: {
+          routines: {
+            columns: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        limit: 1
+      });
+
+      const routineMap = program?.routines.reduce((acc, routine) => {
+        acc[routine.id] = routine.name;
+        return acc;
+      }, {} as Record<number, string>);
+
       const logs = await db.query.workoutLogs.findMany({
         where: and(
           eq(workoutLogs.clientProgramId, parseInt(req.params.programId)),
@@ -782,11 +801,14 @@ export function registerRoutes(app: Express): Server {
         id: log.id,
         date: log.date,
         routineId: log.routineId,
-        routineName: log.data?.routineName || 'Unknown Routine',
-        exercises: log.data?.exerciseLogs || [],
-        volume: log.data?.exerciseLogs?.reduce((total: number, ex: any) =>
-          total + (ex.sets?.reduce((setTotal: number, set: any) =>
-            setTotal + (parseInt(set.weight || '0') * parseInt(set.reps || '0')), 0) || 0), 0) || 0,
+        routineName: routineMap[log.routineId] || 'Unknown Routine',
+        exercises: log.data?.exerciseLogs?.map((ex: any) => ({
+          name: ex.name,
+          sets: ex.sets.map((set: any) => ({
+            weight: parseInt(set.weight || '0'),
+            reps: parseInt(set.reps || '0')
+          }))
+        })) || [],
         notes: log.data?.notes
       }));
 
@@ -794,6 +816,43 @@ export function registerRoutes(app: Express): Server {
       res.json(formattedLogs);
     } catch (error: any) {
       console.error("Error fetching workout history:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Add delete workout log endpoint
+  app.delete("/api/workouts/:id", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      // First verify the workout log belongs to this user
+      const [workoutLog] = await db.query.workoutLogs.findMany({
+        where: and(
+          eq(workoutLogs.id, parseInt(req.params.id)),
+          eq(workoutLogs.clientId, req.user.id)
+        ),
+        limit: 1
+      });
+
+      if (!workoutLog) {
+        return res.status(404).json({
+          error: "Workout log not found",
+          message: "The requested workout log does not exist or you don't have access to it"
+        });
+      }
+
+      // Delete the workout log
+      await db.delete(workoutLogs)
+        .where(and(
+          eq(workoutLogs.id, parseInt(req.params.id)),
+          eq(workoutLogs.clientId, req.user.id)
+        ));
+
+      res.json({ message: "Workout log deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting workout log:", error);
       res.status(500).send(error.message);
     }
   });
@@ -941,8 +1000,7 @@ export function registerRoutes(app: Express): Server {
       return res.status(401).send("Not authenticated");
     }
 
-    try {
-      const programId = parseInt(req.params.id);
+    try {      const programId = parseInt(req.params.id);
 
       // Check if already enrolled
       const existingEnrollment = await db.query.clientPrograms.findFirst({

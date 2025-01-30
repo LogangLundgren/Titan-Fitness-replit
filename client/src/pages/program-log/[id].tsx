@@ -86,15 +86,15 @@ interface MealLog {
   carbs: number;
   fats: number;
   notes?: string;
-  id?: number; 
+  id?: number;
 }
 
 interface WorkoutHistory {
+  id: number;
   date: string;
   routineId: number;
   routineName: string;
   exercises: Array<{
-    exerciseId: number;
     name: string;
     sets: Array<{
       weight: number;
@@ -102,7 +102,6 @@ interface WorkoutHistory {
     }>;
   }>;
   notes?: string;
-  volume: number; // Added volume property
 }
 
 interface MealHistory {
@@ -112,7 +111,7 @@ interface MealHistory {
   carbs: number;
   fats: number;
   notes?: string;
-  id: number; 
+  id: number;
 }
 
 export default function ProgramLog() {
@@ -246,6 +245,35 @@ export default function ProgramLog() {
       toast({
         title: "Success",
         description: "Meal log deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    },
+  });
+
+  const deleteWorkoutMutation = useMutation({
+    mutationFn: async (workoutId: number) => {
+      const response = await fetch(`/api/workouts/${workoutId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/workouts/${id}`] });
+      toast({
+        title: "Success",
+        description: "Workout log deleted successfully",
       });
     },
     onError: (error: Error) => {
@@ -489,35 +517,75 @@ export default function ProgramLog() {
               )}
             </TabsContent>
 
-            {/* History tab updates */}
             <TabsContent value="history">
               <div className="space-y-4">
                 {workoutHistory && workoutHistory.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Routine</TableHead>
-                        <TableHead>Volume</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {workoutHistory.map((log) => (
-                        <TableRow key={`${log.date}-${log.routineId}`}>
-                          <TableCell>{new Date(log.date).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}</TableCell>
-                          <TableCell>{log.routineName}</TableCell>
-                          <TableCell>{log.volume.toLocaleString()} lbs</TableCell>
-                          <TableCell>{log.notes || 'No notes'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="space-y-6">
+                    {workoutHistory.map((log) => (
+                      <Card key={`${log.date}-${log.routineId}`}>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                          <div>
+                            <CardTitle className="text-lg">
+                              {log.routineName}
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(log.date).toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              if (confirm("Are you sure you want to delete this workout log?")) {
+                                deleteWorkoutMutation.mutate(log.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </CardHeader>
+                        <CardContent>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Exercise</TableHead>
+                                <TableHead>Sets</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {log.exercises.map((exercise, index) => (
+                                <TableRow key={`${index}-${exercise.name}`}>
+                                  <TableCell className="font-medium">
+                                    {exercise.name}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="space-y-1">
+                                      {exercise.sets.map((set, setIndex) => (
+                                        <div key={setIndex} className="text-sm">
+                                          Set {setIndex + 1}: {set.weight}lbs × {set.reps} reps
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          {log.notes && (
+                            <div className="mt-4">
+                              <Label>Notes</Label>
+                              <p className="text-sm text-muted-foreground mt-1">{log.notes}</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 ) : (
                   <Card>
                     <CardContent className="py-8 text-center">
@@ -529,7 +597,6 @@ export default function ProgramLog() {
               </div>
             </TabsContent>
 
-            {/* Analytics tab updates */}
             <TabsContent value="analytics">
               <div className="space-y-6">
                 <Card>
@@ -548,7 +615,7 @@ export default function ProgramLog() {
                             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                             .map(log => ({
                               date: new Date(log.date).toLocaleDateString(),
-                              volume: log.volume,
+                              volume: log.exercises.reduce((sum, exercise) => sum + exercise.sets.reduce((setSum, set) => setSum + set.weight * set.reps, 0), 0),
                               routine: log.routineName
                             }))}
                           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
