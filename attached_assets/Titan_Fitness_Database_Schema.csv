@@ -1,0 +1,67 @@
+Table,Column,Data Type
+Users,user_id,UUID PRIMARY KEY
+Users,username,VARCHAR(255) UNIQUE NOT NULL
+Users,email,VARCHAR(255) UNIQUE NOT NULL
+Users,password,VARCHAR(255) NOT NULL
+Users,account_type,"VARCHAR(50) CHECK(account_type IN ('Client', 'Coach'))"
+Users,created_at,TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+Profiles,profile_id,UUID PRIMARY KEY
+Profiles,user_id,UUID REFERENCES Users(user_id) ON DELETE CASCADE
+Profiles,full_name,VARCHAR(255)
+Profiles,bio,TEXT
+Profiles,phone_number,VARCHAR(20)
+Profiles,specialties,TEXT
+Profiles,certifications,TEXT
+Profiles,experience,TEXT
+Profiles,social_links,JSON
+Profiles,public_profile,BOOLEAN DEFAULT TRUE
+Programs,program_id,UUID PRIMARY KEY
+Programs,coach_id,UUID REFERENCES Users(user_id) ON DELETE CASCADE
+Programs,program_name,VARCHAR(255) NOT NULL
+Programs,description,TEXT
+Programs,program_type,"VARCHAR(50) CHECK(program_type IN ('Lifting', 'Diet', 'Posing', 'All-Inclusive'))"
+Programs,price,"DECIMAL(10,2) DEFAULT 0.00"
+Programs,public,BOOLEAN DEFAULT TRUE
+Programs,created_at,TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+Marketplace,listing_id,UUID PRIMARY KEY
+Marketplace,program_id,UUID REFERENCES Programs(program_id) ON DELETE CASCADE
+Marketplace,coach_id,UUID REFERENCES Users(user_id)
+Marketplace,filters,JSON
+Marketplace,created_at,TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+WorkoutLogs,log_id,UUID PRIMARY KEY
+WorkoutLogs,user_id,UUID REFERENCES Users(user_id)
+WorkoutLogs,program_id,UUID REFERENCES Programs(program_id)
+WorkoutLogs,exercise_name,VARCHAR(255) NOT NULL
+WorkoutLogs,sets,INT NOT NULL
+WorkoutLogs,reps,INT NOT NULL
+WorkoutLogs,weight,"DECIMAL(5,2)"
+WorkoutLogs,logged_at,TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+MealLogs,meal_id,UUID PRIMARY KEY
+MealLogs,user_id,UUID REFERENCES Users(user_id)
+MealLogs,program_id,UUID REFERENCES Programs(program_id)
+MealLogs,meal_name,VARCHAR(255) NOT NULL
+MealLogs,calories,INT NOT NULL
+MealLogs,protein,INT
+MealLogs,carbs,INT
+MealLogs,fats,INT
+MealLogs,quantity,FLOAT
+MealLogs,units,VARCHAR(50)
+MealLogs,logged_at,TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+Analytics,analytics_id,UUID PRIMARY KEY
+Analytics,user_id,UUID REFERENCES Users(user_id)
+Analytics,program_id,UUID REFERENCES Programs(program_id)
+Analytics,data_type,"VARCHAR(50) CHECK(data_type IN ('Workout', 'Meal'))"
+Analytics,data,JSON
+Analytics,created_at,TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+Messages,message_id,UUID PRIMARY KEY
+Messages,sender_id,UUID REFERENCES Users(user_id)
+Messages,receiver_id,UUID REFERENCES Users(user_id)
+Messages,program_id,UUID REFERENCES Programs(program_id)
+Messages,message,TEXT
+Messages,sent_at,TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+Dashboard,dashboard_id,UUID PRIMARY KEY
+Dashboard,user_id,UUID REFERENCES Users(user_id)
+Dashboard,program_id,UUID REFERENCES Programs(program_id)
+Dashboard,view_type,"VARCHAR(50) CHECK(view_type IN ('Analytics', 'History', 'Chat'))"
+Dashboard,data,JSON
+Dashboard,created_at,TIMESTAMP DEFAULT CURRENT_TIMESTAMP

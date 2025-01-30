@@ -3,31 +3,60 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
 
+// Base users table - keeping existing columns while adding new ones
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").unique().notNull(),
+  email: text("email").unique().notNull(),
   password: text("password").notNull(),
-  accountType: text("account_type").notNull().default("client"),
+  accountType: text("account_type", { enum: ['client', 'coach'] }).notNull().default('client'),
   fullName: text("full_name"),
-  email: text("email"),
-  bio: text("bio"),
   phoneNumber: text("phone_number"),
-  specialties: text("specialties"),
-  certifications: text("certifications"),
+  bio: text("bio"),
   experience: text("experience"),
+  certifications: text("certifications"),
+  specialties: text("specialties"),
   socialLinks: jsonb("social_links").default('{}'),
   isPublicProfile: boolean("is_public_profile").default(true),
   profilePictureUrl: text("profile_picture_url"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// New coaches table
+export const coaches = pgTable("coaches", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  bio: text("bio"),
+  experience: text("experience"),
+  certifications: text("certifications"),
+  specialties: text("specialties"),
+  socialLinks: jsonb("social_links").default('{}'),
+  isPublicProfile: boolean("is_public_profile").default(true),
+  profilePictureUrl: text("profile_picture_url"),
+});
+
+// New clients table
+export const clients = pgTable("clients", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  bio: text("bio"),
+  height: text("height"),
+  weight: text("weight"),
+  fitnessGoals: text("fitness_goals"),
+  medicalConditions: text("medical_conditions"),
+  dietaryRestrictions: text("dietary_restrictions"),
+  profilePictureUrl: text("profile_picture_url"),
+});
+
+// Keeping existing foreign key references to users table temporarily
 export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
   type: text("type").notNull(),
   price: real("price").default(0),
-  coachId: integer("coach_id").references(() => users.id),
+  coachId: integer("coach_id").references(() => users.id), // Keeping reference to users for now
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   isPublic: boolean("is_public").default(false),
@@ -35,6 +64,27 @@ export const programs = pgTable("programs", {
   status: text("status"),
   cycleLength: integer("cycle_length"),
 });
+
+// Relations definitions
+export const userRelations = relations(users, ({ many }) => ({
+  programs: many(programs),
+  coachProfile: many(coaches),
+  clientProfile: many(clients),
+}));
+
+export const coachRelations = relations(coaches, ({ one }) => ({
+  user: one(users, {
+    fields: [coaches.userId],
+    references: [users.id],
+  }),
+}));
+
+export const clientRelations = relations(clients, ({ one }) => ({
+  user: one(users, {
+    fields: [clients.userId],
+    references: [users.id],
+  }),
+}));
 
 export const routines = pgTable("routines", {
   id: serial("id").primaryKey(),
@@ -59,7 +109,7 @@ export const programExercises = pgTable("program_exercises", {
 
 export const clientPrograms = pgTable("client_programs", {
   id: serial("id").primaryKey(),
-  clientId: integer("client_id").references(() => users.id),
+  clientId: integer("client_id").references(() => clients.id),
   programId: integer("program_id").references(() => programs.id),
   active: boolean("active").default(true),
   startDate: timestamp("start_date").defaultNow(),
@@ -71,7 +121,7 @@ export const clientPrograms = pgTable("client_programs", {
 
 export const workoutLogs = pgTable("workout_logs", {
   id: serial("id").primaryKey(),
-  clientId: integer("client_id").references(() => users.id),
+  clientId: integer("client_id").references(() => clients.id),
   clientProgramId: integer("client_program_id").references(() => clientPrograms.id),
   routineId: integer("routine_id").references(() => routines.id),
   data: jsonb("data").default('{}'),
@@ -80,7 +130,7 @@ export const workoutLogs = pgTable("workout_logs", {
 
 export const mealLogs = pgTable("meal_logs", {
   id: serial("id").primaryKey(),
-  clientId: integer("client_id").references(() => users.id),
+  clientId: integer("client_id").references(() => clients.id),
   clientProgramId: integer("client_program_id").references(() => clientPrograms.id),
   calories: integer("calories"),
   protein: integer("protein"),
@@ -99,9 +149,9 @@ export const betaSignups = pgTable("beta_signups", {
 });
 
 export const programRelations = relations(programs, ({ one, many }) => ({
-  coach: one(users, {
+  coach: one(coaches, {
     fields: [programs.coachId],
-    references: [users.id],
+    references: [coaches.id],
   }),
   routines: many(routines),
   clientPrograms: many(clientPrograms),
@@ -122,17 +172,10 @@ export const programExerciseRelations = relations(programExercises, ({ one }) =>
   }),
 }));
 
-export const userRelations = relations(users, ({ many }) => ({
-  programs: many(programs),
-  enrollments: many(clientPrograms),
-  workoutLogs: many(workoutLogs),
-  mealLogs: many(mealLogs),
-}));
-
 export const clientProgramRelations = relations(clientPrograms, ({ one, many }) => ({
-  client: one(users, {
+  client: one(clients, {
     fields: [clientPrograms.clientId],
-    references: [users.id],
+    references: [clients.id],
   }),
   program: one(programs, {
     fields: [clientPrograms.programId],
@@ -142,7 +185,10 @@ export const clientProgramRelations = relations(clientPrograms, ({ one, many }) 
   mealLogs: many(mealLogs),
 }));
 
+
 export type User = typeof users.$inferSelect;
+export type Coach = typeof coaches.$inferSelect;
+export type Client = typeof clients.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
 export type ProgramExercise = typeof programExercises.$inferSelect;
@@ -153,6 +199,12 @@ export type BetaSignup = typeof betaSignups.$inferSelect;
 
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
+
+export const insertCoachSchema = createInsertSchema(coaches);
+export const selectCoachSchema = createSelectSchema(coaches);
+
+export const insertClientSchema = createInsertSchema(clients);
+export const selectClientSchema = createSelectSchema(clients);
 
 export const mealPlanSchema = z.object({
   mealName: z.string(),

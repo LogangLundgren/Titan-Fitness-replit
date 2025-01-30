@@ -1,0 +1,146 @@
+1. Users Table
+Purpose: Stores general user information for both clients and coaches.
+Columns:
+Column Name	Data Type	Constraints
+user_id	UUID (Primary Key)	Unique, auto-generated
+username	VARCHAR(255)	Unique, required
+email	VARCHAR(255)	Unique, required
+password	TEXT (Hashed)	Required
+account_type	ENUM('client', 'coach')	Required
+created_at	TIMESTAMP	Auto-generated
+updated_at	TIMESTAMP	Auto-updated
+Relationships:
+account_type determines which related tables are applicable (coaches, clients).
+Foreign Key reference in Clients and Coaches tables.
+Indexes & Optimizations:
+Index on username and email for faster lookups.
+Password stored securely using bcrypt or Argon2 hashing.
+2. Clients Table
+Purpose: Stores additional information for clients.
+Columns:
+Column Name	Data Type	Constraints
+client_id	UUID (Primary Key)	Unique, auto-generated
+user_id	UUID (Foreign Key)	References Users(user_id), required
+bio	TEXT	Optional
+created_at	TIMESTAMP	Auto-generated
+Relationships:
+user_id links to the Users table.
+Connects to workout_logs, meal_logs, enrolled_programs.
+Indexes & Optimizations:
+Foreign key on user_id to ensure referential integrity.
+3. Coaches Table
+Purpose: Stores additional information for coaches.
+Columns:
+Column Name	Data Type	Constraints
+coach_id	UUID (Primary Key)	Unique, auto-generated
+user_id	UUID (Foreign Key)	References Users(user_id), required
+bio	TEXT	Optional
+experience	TEXT	Optional
+certifications	TEXT	Optional
+social_links	JSON	Optional (stores Instagram, Twitter, etc.)
+created_at	TIMESTAMP	Auto-generated
+Relationships:
+user_id links to the Users table.
+Connects to programs.
+Indexes & Optimizations:
+Foreign key index on user_id for optimized joins.
+Consider using PostgreSQL JSONB for flexible social media storage.
+4. Programs Table
+Purpose: Stores all fitness programs created by coaches.
+Columns:
+Column Name	Data Type	Constraints
+program_id	UUID (Primary Key)	Unique, auto-generated
+coach_id	UUID (Foreign Key)	References Coaches(coach_id), required
+title	VARCHAR(255)	Required
+description	TEXT	Optional
+price	DECIMAL(10,2)	Required
+is_public	BOOLEAN	Default: true
+created_at	TIMESTAMP	Auto-generated
+Relationships:
+coach_id links to the Coaches table.
+Connects to enrolled_programs, workout_routines, meal_plans.
+Indexes & Optimizations:
+Index on title and price for marketplace searches.
+5. Enrolled Programs Table
+Purpose: Tracks which clients are enrolled in which programs.
+Columns:
+Column Name	Data Type	Constraints
+enrollment_id	UUID (Primary Key)	Unique, auto-generated
+client_id	UUID (Foreign Key)	References Clients(client_id), required
+program_id	UUID (Foreign Key)	References Programs(program_id), required
+start_date	TIMESTAMP	Auto-generated
+Relationships:
+client_id links to Clients.
+program_id links to Programs.
+Indexes & Optimizations:
+Composite index on (client_id, program_id) for fast lookups.
+6. Workout Routines Table
+Purpose: Stores structured workout plans within programs.
+Columns:
+Column Name	Data Type	Constraints
+routine_id	UUID (Primary Key)	Unique, auto-generated
+program_id	UUID (Foreign Key)	References Programs(program_id), required
+routine_name	VARCHAR(255)	Required
+schedule_cycle	VARCHAR(255)	Optional
+created_at	TIMESTAMP	Auto-generated
+Relationships:
+program_id links to Programs.
+Connects to workout_exercises.
+Indexes & Optimizations:
+Index on program_id for quick filtering.
+7. Workout Exercises Table
+Purpose: Stores individual exercises within workout routines.
+Columns:
+Column Name	Data Type	Constraints
+exercise_id	UUID (Primary Key)	Unique, auto-generated
+routine_id	UUID (Foreign Key)	References Workout_Routines(routine_id), required
+exercise_name	VARCHAR(255)	Required
+sets	INT	Required
+reps	INT	Required
+notes	TEXT	Optional
+Relationships:
+routine_id links to Workout_Routines.
+Indexes & Optimizations:
+Index on routine_id for efficient querying.
+8. Workout Logs Table
+Purpose: Tracks workout performance of clients.
+Columns:
+Column Name	Data Type	Constraints
+log_id	UUID (Primary Key)	Unique, auto-generated
+client_id	UUID (Foreign Key)	References Clients(client_id), required
+exercise_id	UUID (Foreign Key)	References Workout_Exercises(exercise_id), required
+weight	DECIMAL(10,2)	Required
+reps	INT	Required
+date	TIMESTAMP	Auto-generated
+Relationships:
+client_id links to Clients.
+exercise_id links to Workout_Exercises.
+Indexes & Optimizations:
+Composite index (client_id, exercise_id, date) for historical analysis.
+9. Meal Plans Table
+Purpose: Stores meal plans within programs.
+Columns:
+Column Name	Data Type	Constraints
+meal_plan_id	UUID (Primary Key)	Unique, auto-generated
+program_id	UUID (Foreign Key)	References Programs(program_id), required
+meal_name	VARCHAR(255)	Required
+target_calories	INT	Required
+macros	JSON	Stores protein, carbs, fats
+Relationships:
+program_id links to Programs.
+Indexes & Optimizations:
+Consider PostgreSQL JSONB for flexible macros storage.
+10. Meal Logs Table
+Purpose: Tracks clients' meal consumption.
+Columns:
+Column Name	Data Type	Constraints
+log_id	UUID (Primary Key)	Unique, auto-generated
+client_id	UUID (Foreign Key)	References Clients(client_id), required
+meal_plan_id	UUID (Foreign Key)	References Meal_Plans(meal_plan_id), required
+calories_consumed	INT	Required
+date	TIMESTAMP	Auto-generated
+Relationships:
+client_id links to Clients.
+meal_plan_id links to Meal_Plans.
+Indexes & Optimizations:
+Composite index (client_id, meal_plan_id, date) for tracking trends.
