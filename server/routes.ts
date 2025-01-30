@@ -770,7 +770,26 @@ export function registerRoutes(app: Express): Server {
         with: {
           routine: {
             with: {
-              exercises: true
+              exercises: {
+                orderBy: programExercises.orderInRoutine,
+                columns: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  sets: true,
+                  reps: true,
+                  restTime: true,
+                  notes: true,
+                  orderInRoutine: true,
+                }
+              }
+            },
+            columns: {
+              id: true,
+              name: true,
+              dayOfWeek: true,
+              notes: true,
+              orderInCycle: true,
             }
           }
         }
@@ -785,8 +804,8 @@ export function registerRoutes(app: Express): Server {
         routineId: log.routineId,
         routineName: log.routine?.name || 'Unknown Routine',
         exercises: log.data?.exerciseLogs || [],
-        volume: log.data?.exerciseLogs?.reduce((total, ex) =>
-          total + (ex.sets?.reduce((setTotal, set) =>
+        volume: log.data?.exerciseLogs?.reduce((total: number, ex: any) =>
+          total + (ex.sets?.reduce((setTotal: number, set: any) =>
             setTotal + (parseInt(set.weight) * parseInt(set.reps)), 0) || 0), 0) || 0,
         notes: log.data?.notes
       }));
