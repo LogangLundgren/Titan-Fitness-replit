@@ -29,6 +29,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 interface Exercise {
   id: number;
@@ -85,6 +86,30 @@ interface MealLog {
   notes?: string;
 }
 
+interface WorkoutHistory {
+  date: string;
+  routineId: number;
+  routineName: string;
+  exercises: Array<{
+    exerciseId: number;
+    name: string;
+    sets: Array<{
+      weight: number;
+      reps: number;
+    }>;
+  }>;
+  notes?: string;
+}
+
+interface MealHistory {
+  date: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  notes?: string;
+}
+
 export default function ProgramLog() {
   const { id } = useParams();
   const { toast } = useToast();
@@ -109,9 +134,15 @@ export default function ProgramLog() {
   });
 
   // Fetch workout history
-  const { data: workoutHistory } = useQuery({
+  const { data: workoutHistory } = useQuery<WorkoutHistory[]>({
     queryKey: [`/api/workouts/${id}`],
-    enabled: !!id,
+    enabled: !!id && program?.type === 'lifting',
+  });
+
+  // Add meal history query
+  const { data: mealHistory } = useQuery<MealHistory[]>({
+    queryKey: [`/api/meals/${id}`],
+    enabled: !!id && program?.type === 'diet',
   });
 
   // Mutation for logging workout
@@ -421,7 +452,7 @@ export default function ProgramLog() {
 
             <TabsContent value="history">
               <div className="space-y-4">
-                {workoutHistory ? (
+                {workoutHistory && workoutHistory.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -432,23 +463,19 @@ export default function ProgramLog() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {program.progress?.completed.map((routineId, index) => {
-                        const routine = program.routines?.find(r => r.id.toString() === routineId);
-                        const note = program.progress?.notes?.find(n => n.routineId.toString() === routineId);
-                        return (
-                          <TableRow key={index}>
-                            <TableCell>{note?.date ? new Date(note.date).toLocaleDateString('en-US', {
-                              weekday: 'short',
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            }) : 'N/A'}</TableCell>
-                            <TableCell>{routine?.name || 'Unknown'}</TableCell>
-                            <TableCell>Coming soon</TableCell>
-                            <TableCell>{note?.note || 'No notes'}</TableCell>
-                          </TableRow>
-                        );
-                      })}
+                      {workoutHistory.map((log) => (
+                        <TableRow key={log.routineId}>
+                          <TableCell>{new Date(log.date).toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}</TableCell>
+                          <TableCell>{log.routineName}</TableCell>
+                          <TableCell>Coming soon</TableCell>
+                          <TableCell>{log.notes || 'No notes'}</TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 ) : (
@@ -463,16 +490,38 @@ export default function ProgramLog() {
             </TabsContent>
 
             <TabsContent value="analytics">
-              <Card>
-                <CardContent className="py-8">
-                  <div className="text-center space-y-2">
-                    <h3 className="text-lg font-medium">Analytics Coming Soon</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Track your progress, view trends, and analyze your performance
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Volume Progression</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    {workoutHistory && workoutHistory.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={workoutHistory.map(log => ({
+                            date: new Date(log.date).toLocaleDateString(),
+                            volume: log.exercises.reduce((total, ex) =>
+                              total + ex.sets.reduce((setTotal, set) =>
+                                setTotal + (set.weight * set.reps), 0), 0)
+                          }))}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="volume" stroke="#2563eb" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-muted-foreground">Start logging workouts to see your progress</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
@@ -603,7 +652,7 @@ export default function ProgramLog() {
 
             <TabsContent value="history">
               <div className="space-y-4">
-                {program.progress?.completed.length ? (
+                {mealHistory && mealHistory.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -616,19 +665,19 @@ export default function ProgramLog() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {program.progress.completed.map((entry, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{new Date(entry).toLocaleDateString('en-US', {
+                      {mealHistory.map((log) => (
+                        <TableRow key={log.date}>
+                          <TableCell>{new Date(log.date).toLocaleDateString('en-US', {
                             weekday: 'short',
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric'
                           })}</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
+                          <TableCell>{log.calories}</TableCell>
+                          <TableCell>{log.protein}</TableCell>
+                          <TableCell>{log.carbs}</TableCell>
+                          <TableCell>{log.fats}</TableCell>
+                          <TableCell>{log.notes || 'No notes'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -645,16 +694,75 @@ export default function ProgramLog() {
             </TabsContent>
 
             <TabsContent value="analytics">
-              <Card>
-                <CardContent className="py-8">
-                  <div className="text-center space-y-2">
-                    <h3 className="text-lg font-medium">Analytics Coming Soon</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Track your nutrition trends, macro distribution, and meal patterns
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Macro Trends</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    {mealHistory && mealHistory.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={mealHistory.map(log => ({
+                            date: new Date(log.date).toLocaleDateString(),
+                            calories: log.calories,
+                            protein: log.protein,
+                            carbs: log.carbs,
+                            fats: log.fats,
+                          }))}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="calories" stroke="#2563eb" />
+                          <Line type="monotone" dataKey="protein" stroke="#16a34a" />
+                          <Line type="monotone" dataKey="carbs" stroke="#ca8a04" />
+                          <Line type="monotone" dataKey="fats" stroke="#dc2626" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-muted-foreground">Start logging meals to see your trends</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Macro Distribution</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    {mealHistory && mealHistory.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={[{
+                            name: 'Latest Meal',
+                            protein: mealHistory[0].protein * 4, // 4 calories per gram
+                            carbs: mealHistory[0].carbs * 4, // 4 calories per gram
+                            fats: mealHistory[0].fats * 9, // 9 calories per gram
+                          }]}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="protein" fill="#16a34a" name="Protein" />
+                          <Bar dataKey="carbs" fill="#ca8a04" name="Carbs" />
+                          <Bar dataKey="fats" fill="#dc2626" name="Fats" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-muted-foreground">No macro data available</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
