@@ -5,7 +5,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { users, insertUserSchema } from "@db/schema";
+import { users, coaches, clients, insertUserSchema, type User } from "@db/schema";
 import { db } from "@db";
 import { eq } from "drizzle-orm";
 
@@ -30,7 +30,9 @@ const crypto = {
 
 declare global {
   namespace Express {
-    interface User extends SelectUser { }
+    interface User extends User {
+      profileData?: any;
+    }
   }
 }
 
@@ -60,6 +62,7 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        // Get user with additional profile data
         const [user] = await db
           .select()
           .from(users)
@@ -69,11 +72,31 @@ export function setupAuth(app: Express) {
         if (!user) {
           return done(null, false, { message: "Incorrect username." });
         }
+
         const isMatch = await crypto.compare(password, user.password);
         if (!isMatch) {
           return done(null, false, { message: "Incorrect password." });
         }
-        return done(null, user);
+
+        // Fetch additional profile data based on account type
+        let profileData = null;
+        if (user.accountType === 'coach') {
+          const [coachData] = await db
+            .select()
+            .from(coaches)
+            .where(eq(coaches.userId, user.id))
+            .limit(1);
+          profileData = coachData;
+        } else {
+          const [clientData] = await db
+            .select()
+            .from(clients)
+            .where(eq(clients.userId, user.id))
+            .limit(1);
+          profileData = clientData;
+        }
+
+        return done(null, { ...user, profileData });
       } catch (err) {
         return done(err);
       }
@@ -91,7 +114,30 @@ export function setupAuth(app: Express) {
         .from(users)
         .where(eq(users.id, id))
         .limit(1);
-      done(null, user);
+
+      if (!user) {
+        return done(null, false);
+      }
+
+      // Fetch additional profile data
+      let profileData = null;
+      if (user.accountType === 'coach') {
+        const [coachData] = await db
+          .select()
+          .from(coaches)
+          .where(eq(coaches.userId, user.id))
+          .limit(1);
+        profileData = coachData;
+      } else {
+        const [clientData] = await db
+          .select()
+          .from(clients)
+          .where(eq(clients.userId, user.id))
+          .limit(1);
+        profileData = clientData;
+      }
+
+      done(null, { ...user, profileData });
     } catch (err) {
       done(err);
     }
@@ -107,7 +153,7 @@ export function setupAuth(app: Express) {
           .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
       }
 
-      const { username, password, accountType } = result.data;
+      const { username, email, password, accountType } = result.data;
 
       const [existingUser] = await db
         .select()
@@ -125,18 +171,44 @@ export function setupAuth(app: Express) {
         .insert(users)
         .values({
           username,
+          email,
           password: hashedPassword,
           accountType: accountType || "client",
         })
         .returning();
 
-      req.login(newUser, (err) => {
+      // Create corresponding profile based on account type
+      let profileData = null;
+      if (accountType === 'coach') {
+        const [coachProfile] = await db
+          .insert(coaches)
+          .values({
+            userId: newUser.id,
+          })
+          .returning();
+        profileData = coachProfile;
+      } else {
+        const [clientProfile] = await db
+          .insert(clients)
+          .values({
+            userId: newUser.id,
+          })
+          .returning();
+        profileData = clientProfile;
+      }
+
+      req.login({ ...newUser, profileData }, (err) => {
         if (err) {
           return next(err);
         }
         return res.json({
           message: "Registration successful",
-          user: { id: newUser.id, username: newUser.username, accountType: newUser.accountType },
+          user: {
+            id: newUser.id,
+            username: newUser.username,
+            accountType: newUser.accountType,
+            profileData
+          },
         });
       });
     } catch (error) {
@@ -161,7 +233,12 @@ export function setupAuth(app: Express) {
 
         return res.json({
           message: "Login successful",
-          user: { id: user.id, username: user.username, accountType: user.accountType },
+          user: {
+            id: user.id,
+            username: user.username,
+            accountType: user.accountType,
+            profileData: user.profileData
+          },
         });
       });
     })(req, res, next);
