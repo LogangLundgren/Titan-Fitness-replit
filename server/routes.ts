@@ -767,32 +767,12 @@ export function registerRoutes(app: Express): Server {
           eq(workoutLogs.clientId, req.user.id)
         ),
         orderBy: [desc(workoutLogs.date)],
-        with: {
-          routine: {
-            with: {
-              exercises: {
-                orderBy: programExercises.orderInRoutine,
-                columns: {
-                  id: true,
-                  name: true,
-                  description: true,
-                  sets: true,
-                  reps: true,
-                  restTime: true,
-                  notes: true,
-                  orderInRoutine: true,
-                }
-              }
-            },
-            columns: {
-              id: true,
-              name: true,
-              dayOfWeek: true,
-              notes: true,
-              orderInCycle: true,
-            }
-          }
-        }
+        columns: {
+          id: true,
+          date: true,
+          routineId: true,
+          data: true,
+        },
       });
 
       console.log(`[Debug] Found ${logs.length} workout logs`);
@@ -802,11 +782,11 @@ export function registerRoutes(app: Express): Server {
         id: log.id,
         date: log.date,
         routineId: log.routineId,
-        routineName: log.routine?.name || 'Unknown Routine',
+        routineName: log.data?.routineName || 'Unknown Routine',
         exercises: log.data?.exerciseLogs || [],
         volume: log.data?.exerciseLogs?.reduce((total: number, ex: any) =>
           total + (ex.sets?.reduce((setTotal: number, set: any) =>
-            setTotal + (parseInt(set.weight) * parseInt(set.reps)), 0) || 0), 0) || 0,
+            setTotal + (parseInt(set.weight || '0') * parseInt(set.reps || '0')), 0) || 0), 0) || 0,
         notes: log.data?.notes
       }));
 

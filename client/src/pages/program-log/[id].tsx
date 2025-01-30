@@ -86,7 +86,7 @@ interface MealLog {
   carbs: number;
   fats: number;
   notes?: string;
-  id?: number; // Added id for delete mutation
+  id?: number; 
 }
 
 interface WorkoutHistory {
@@ -102,6 +102,7 @@ interface WorkoutHistory {
     }>;
   }>;
   notes?: string;
+  volume: number; // Added volume property
 }
 
 interface MealHistory {
@@ -111,7 +112,7 @@ interface MealHistory {
   carbs: number;
   fats: number;
   notes?: string;
-  id: number; // Added id for delete mutation
+  id: number; 
 }
 
 export default function ProgramLog() {
@@ -488,6 +489,7 @@ export default function ProgramLog() {
               )}
             </TabsContent>
 
+            {/* History tab updates */}
             <TabsContent value="history">
               <div className="space-y-4">
                 {workoutHistory && workoutHistory.length > 0 ? (
@@ -502,7 +504,7 @@ export default function ProgramLog() {
                     </TableHeader>
                     <TableBody>
                       {workoutHistory.map((log) => (
-                        <TableRow key={log.routineId}>
+                        <TableRow key={`${log.date}-${log.routineId}`}>
                           <TableCell>{new Date(log.date).toLocaleDateString('en-US', {
                             weekday: 'short',
                             year: 'numeric',
@@ -510,7 +512,7 @@ export default function ProgramLog() {
                             day: 'numeric'
                           })}</TableCell>
                           <TableCell>{log.routineName}</TableCell>
-                          <TableCell>Coming soon</TableCell>
+                          <TableCell>{log.volume.toLocaleString()} lbs</TableCell>
                           <TableCell>{log.notes || 'No notes'}</TableCell>
                         </TableRow>
                       ))}
@@ -527,29 +529,54 @@ export default function ProgramLog() {
               </div>
             </TabsContent>
 
+            {/* Analytics tab updates */}
             <TabsContent value="analytics">
               <div className="space-y-6">
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle>Volume Progression</CardTitle>
+                    <DateRangePicker
+                      value={dateRange}
+                      onChange={setDateRange}
+                    />
                   </CardHeader>
                   <CardContent className="h-[300px]">
                     {workoutHistory && workoutHistory.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
-                          data={workoutHistory.map(log => ({
-                            date: new Date(log.date).toLocaleDateString(),
-                            volume: log.exercises.reduce((total, ex) =>
-                              total + ex.sets.reduce((setTotal, set) =>
-                                setTotal + (set.weight * set.reps), 0), 0)
-                          }))}
+                          data={workoutHistory
+                            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                            .map(log => ({
+                              date: new Date(log.date).toLocaleDateString(),
+                              volume: log.volume,
+                              routine: log.routineName
+                            }))}
                           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" />
                           <YAxis />
-                          <Tooltip />
-                          <Line type="monotone" dataKey="volume" stroke="#2563eb" />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                return (
+                                  <div className="bg-background border rounded-lg p-2 shadow-lg">
+                                    <p className="font-medium">{payload[0].payload.routine}</p>
+                                    <p>Volume: {payload[0].value.toLocaleString()} lbs</p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="volume"
+                            name="Total Volume (lbs)"
+                            stroke="#2563eb"
+                            dot
+                          />
                         </LineChart>
                       </ResponsiveContainer>
                     ) : (
@@ -559,8 +586,48 @@ export default function ProgramLog() {
                     )}
                   </CardContent>
                 </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Workout Frequency</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                    {workoutHistory && workoutHistory.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={Object.entries(
+                            workoutHistory.reduce((acc: { [key: string]: number }, log) => {
+                              acc[log.routineName] = (acc[log.routineName] || 0) + 1;
+                              return acc;
+                            }, {})
+                          ).map(([name, count]) => ({
+                            name,
+                            count,
+                          }))}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis allowDecimals={false} />
+                          <Tooltip />
+                          <Legend />
+                          <Bar
+                            dataKey="count"
+                            name="Number of Workouts"
+                            fill="#2563eb"
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <p className="text-muted-foreground">No workout data available</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             </TabsContent>
+
           </Tabs>
         </div>
       ) : program.type === 'diet' ? (
