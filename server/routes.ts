@@ -757,27 +757,112 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get meal logs with edit capability flag
-  app.get("/api/meals", async (req, res) => {
+  // Add new meal log
+  app.post("/api/meals", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
     }
 
     try {
-      const logs = await db.query.mealLogs.findMany({
-        where: eq(mealLogs.clientId, req.user.id),
-        orderBy: [desc(mealLogs.date)],
+      const { clientProgramId, data } = req.body;
+
+      // Verify the program enrollment exists and belongs to this user
+      const [enrollment] = await db.query.clientPrograms.findMany({
+        where: and(
+          eq(clientPrograms.id, clientProgramId),
+          eq(clientPrograms.clientId, req.user.id)
+        ),
+        limit: 1
       });
 
-      // Transform logs to include edit/delete capabilities
+      if (!enrollment) {
+        return res.status(404).json({
+          error: "Program enrollment not found",
+          message: "The requested program enrollment does not exist or you don't have access to it"
+        });
+      }
+
+      // Create the meal log
+      const [mealLog] = await db.insert(mealLogs)
+        .values({
+          clientId: req.user.id,
+          clientProgramId: clientProgramId,
+          calories: data.calories,
+          protein: data.protein,
+          carbs: data.carbs,
+          fats: data.fats,
+          data: {
+            notes: data.notes
+          },
+          date: new Date()
+        })
+        .returning();
+
+      console.log(`[Debug] Created meal log:`, mealLog);
+
+      res.json(mealLog);
+    } catch (error: any) {
+      console.error("Error creating meal log:", error);
+      res.status(500).json({
+        error: "Failed to create meal log",
+        details: error.message
+      });
+    }
+  });
+
+
+  // Get meal logs for a specific program
+  app.get("/api/meals/:programId", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      console.log(`[Debug] Fetching meal logs for program ${req.params.programId} and user ${req.user.id}`);
+
+      // Verify the program enrollment exists and belongs to this user
+      const [enrollment] = await db.query.clientPrograms.findMany({
+        where: and(
+          eq(clientPrograms.id, parseInt(req.params.programId)),
+          eq(clientPrograms.clientId, req.user.id)
+        ),
+        limit: 1
+      });
+
+      if (!enrollment) {
+        return res.status(404).json({
+          error: "Program enrollment not found",
+          message: "The requested program enrollment does not exist or you don't have access to it"
+        });
+      }
+
+      // Get meal logs with strict filtering by both clientId and clientProgramId
+      const logs = await db.query.mealLogs.findMany({
+        where: and(
+          eq(mealLogs.clientId, req.user.id),
+          eq(mealLogs.clientProgramId, parseInt(req.params.programId))
+        ),
+        orderBy: [desc(mealLogs.date)]
+      });
+
+      console.log(`[Debug] Found ${logs.length} meal logs for client ${req.user.id} in program ${req.params.programId}`);
+
+      // Transform logs with edit/delete capabilities and proper data formatting
       const formattedLogs = logs.map(log => ({
-        ...log,
+        id: log.id,
+        date: log.date,
+        calories: log.calories || 0,
+        protein: log.protein || 0,
+        carbs: log.carbs || 0,
+        fats: log.fats || 0,
+        notes: log.data?.notes || '',
         canEdit: true,
         canDelete: true
       }));
 
       res.json(formattedLogs);
     } catch (error: any) {
+      console.error("Error fetching meal logs:", error);
       res.status(500).send(error.message);
     }
   });
@@ -815,71 +900,6 @@ export function registerRoutes(app: Express): Server {
       res.json({ message: "Meal log deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting meal log:", error);
-      res.status(500).send(error.message);
-    }
-  });
-
-  //Updated get meal logs
-  app.get("/api/meals/:programId", async (req, res) => {
-    if (!req.user) {
-      return res.status(401).send("Not authenticated");
-    }
-
-    try {
-      // Verify the program enrollment exists and belongs to this user
-      const [enrollment] = await db.query.clientPrograms.findMany({
-        where: and(
-          eq(clientPrograms.id, parseInt(req.params.programId)),
-          eq(clientPrograms.clientId, req.user.id)
-        ),
-        limit: 1
-      });
-
-      if (!enrollment) {
-        return res.status(404).json({
-          error: "Program enrollment not found",
-          message: "The requested program enrollment does not exist or you don't have access to it"
-        });
-      }
-
-      // Get meal logs with strict filtering by both clientId and clientProgramId
-      const logs = await db.query.mealLogs.findMany({
-        where: and(
-          eq(mealLogs.clientId, req.user.id),
-          eq(mealLogs.clientProgramId, parseInt(req.params.programId))
-        ),
-        orderBy: [desc(mealLogs.date)],
-        columns: {
-          id: true,
-          date: true,
-          calories: true,
-          protein: true,
-          carbs: true,
-          fats: true,
-          data: true,
-          clientId: true,
-          clientProgramId: true
-        }
-      });
-
-      console.log(`[Debug] Found ${logs.length} meal logs for client ${req.user.id} in program ${req.params.programId}`);
-
-      // Transform logs with edit/delete capabilities
-      const formattedLogs = logs.map(log => ({
-        id: log.id,
-        date: log.date,
-        calories: log.calories || 0,
-        protein: log.protein || 0,
-        carbs: log.carbs || 0,
-        fats: log.fats || 0,
-        notes: log.data?.notes || '',
-        canEdit: true,
-        canDelete: true
-      }));
-
-      res.json(formattedLogs);
-    } catch (error: any) {
-      console.error("Error fetching meal logs:", error);
       res.status(500).send(error.message);
     }
   });
@@ -1078,44 +1098,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get meal history for a specific program
-  app.get("/api/meals/:programId", async (req, res) => {
-    if (!req.user) {
-      return res.status(401).send("Not authenticated");
-    }
-
-    try {
-      console.log(`[Debug] Fetching meal history for program ${req.params.programId} and user ${req.user.id}`);
-
-      const logs = await db.query.mealLogs.findMany({
-        where: and(
-          eq(mealLogs.clientProgramId, parseInt(req.params.programId)),
-          eq(mealLogs.clientId, req.user.id)
-        ),
-        orderBy: [desc(mealLogs.date)]
-      });
-
-      console.log(`[Debug] Found ${logs.length} meal logs`);
-      console.log('[Debug] Sample log:', logs[0]);
-
-      const formattedLogs = logs.map(log => ({
-        id: log.id,
-        date: log.date,
-        calories: log.calories || 0,
-        protein: log.protein || 0,
-        carbs: log.carbs || 0,
-        fats: log.fat || 0,
-        notes: log.data?.notes,
-        data: log.data
-      }));
-
-      console.log('[Debug] First formatted log:', formattedLogs[0]);
-      res.json(formattedLogs);
-    } catch (error: any) {
-      console.error("Error fetching meal history:", error);
-      res.status(500).send(error.message);
-    }
-  });
 
   app.get("/api/profile", async (req, res) => {
     if (!req.user) {
