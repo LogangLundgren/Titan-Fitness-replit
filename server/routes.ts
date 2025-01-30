@@ -419,52 +419,53 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      // Get all clients enrolled in this coach's programs
-      const clientsData = await db.query.clientPrograms.findMany({
-        where: eq(clientPrograms.programId, req.user.id),
+      // Get all programs created by this coach
+      const programs = await db.query.programs.findMany({
+        where: eq(programs.coachId, req.user.id),
         with: {
-          client: true,
-          program: true
+          clientPrograms: {
+            with: {
+              client: true,
+              workoutLogs: {
+                orderBy: [desc(workoutLogs.date)],
+                limit: 1
+              },
+              mealLogs: {
+                orderBy: [desc(mealLogs.date)],
+                limit: 1
+              }
+            }
+          }
         }
       });
 
-      // Get workout and meal logs for each client
-      const clientProgress = await Promise.all(
-        clientsData.map(async ({ client }) => {
-          const [workouts, lastActive] = await Promise.all([
-            db.query.workoutLogs.findMany({
-              where: eq(workoutLogs.clientId, client.id),
-              orderBy: [desc(workoutLogs.date)],
-              limit: 1
-            }),
-            db.query.workoutLogs.findMany({
-              where: eq(workoutLogs.clientId, client.id),
-              orderBy: [desc(workoutLogs.date)],
-              limit: 1
-            })
-          ]);
-
-          return {
-            id: client.id,
-            username: client.username,
-            progress: {
-              totalWorkouts: workouts.length,
-              lastActive: lastActive[0]?.date || new Date().toISOString(),
-              programCompletion: 0 // To be calculated based on program structure
-            }
-          };
-        })
+      // Transform data for the dashboard
+      const clients = programs.flatMap(program =>
+        program.clientPrograms.map(enrollment => ({
+          id: enrollment.client.id,
+          name: enrollment.client.fullName,
+          email: enrollment.client.email,
+          programName: program.name,
+          lastActive: enrollment.workoutLogs[0]?.date || enrollment.mealLogs[0]?.date || enrollment.startDate,
+          progress: {
+            totalWorkouts: enrollment.workoutLogs.length,
+            lastActive: enrollment.workoutLogs[0]?.date || new Date().toISOString(),
+            programCompletion: 0 // To be calculated based on program structure
+          }
+        }))
       );
 
-      res.json({
-        clients: clientProgress,
-        stats: {
-          totalClients: clientProgress.length,
-          activePrograms: clientsData.length,
-          messageCount: 0 // To be implemented with messaging system
-        }
-      });
+      const stats = {
+        totalClients: clients.length,
+        activePrograms: programs.length,
+        totalWorkouts: programs.reduce((acc, p) =>
+          acc + p.clientPrograms.reduce((sum, c) => sum + c.workoutLogs.length, 0), 0
+        )
+      };
+
+      res.json({ clients, stats });
     } catch (error: any) {
+      console.error("Error fetching coach dashboard:", error);
       res.status(500).send(error.message);
     }
   });
@@ -814,6 +815,58 @@ export function registerRoutes(app: Express): Server {
       res.json({ message: "Meal log deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting meal log:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Update the GET /api/meals endpoint to filter by clientProgramId
+  app.get("/api/meals/:programId", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      // First verify the program enrollment exists and belongs to this user
+      const [enrollment] = await db.query.clientPrograms.findMany({
+        where: and(
+          eq(clientPrograms.id, parseInt(req.params.programId)),
+          eq(clientPrograms.clientId, req.user.id)
+        ),
+        limit: 1
+      });
+
+      if (!enrollment) {
+        return res.status(404).json({
+          error: "Program enrollment not found",
+          message: "The requested program enrollment does not exist or you don't have access to it"
+        });
+      }
+
+      // Get meal logs for this specific program enrollment
+      const logs = await db.query.mealLogs.findMany({
+        where: and(
+          eq(mealLogs.clientId, req.user.id),
+          eq(mealLogs.clientProgramId, parseInt(req.params.programId))
+        ),
+        orderBy: [desc(mealLogs.date)],
+      });
+
+      // Transform logs to include edit/delete capabilities
+      const formattedLogs = logs.map(log => ({
+        id: log.id,
+        date: log.date,
+        calories: log.calories,
+        protein: log.protein,
+        carbs: log.carbs,
+        fats: log.fats,
+        notes: log.data?.notes,
+        canEdit: true,
+        canDelete: true
+      }));
+
+      res.json(formattedLogs);
+    } catch (error: any) {
+      console.error("Error fetching meal logs:", error);
       res.status(500).send(error.message);
     }
   });
