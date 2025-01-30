@@ -656,6 +656,43 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Delete meal log endpoint
+  app.delete("/api/meals/:id", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      // First verify the meal log belongs to this user
+      const [mealLog] = await db.query.mealLogs.findMany({
+        where: and(
+          eq(mealLogs.id, parseInt(req.params.id)),
+          eq(mealLogs.clientId, req.user.id)
+        ),
+        limit: 1
+      });
+
+      if (!mealLog) {
+        return res.status(404).json({
+          error: "Meal log not found",
+          message: "The requested meal log does not exist or you don't have access to it"
+        });
+      }
+
+      // Delete the meal log
+      await db.delete(mealLogs)
+        .where(and(
+          eq(mealLogs.id, parseInt(req.params.id)),
+          eq(mealLogs.clientId, req.user.id)
+        ));
+
+      res.json({ message: "Meal log deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting meal log:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
   // Enhanced progress data with analytics
   app.get("/api/progress", async (req, res) => {
     if (!req.user) {

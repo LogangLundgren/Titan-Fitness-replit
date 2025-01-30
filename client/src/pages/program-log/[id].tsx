@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -29,7 +29,9 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { startOfMonth, endOfMonth } from "date-fns";
 
 interface Exercise {
   id: number;
@@ -84,6 +86,7 @@ interface MealLog {
   carbs: number;
   fats: number;
   notes?: string;
+  id?: number; // Added id for delete mutation
 }
 
 interface WorkoutHistory {
@@ -108,12 +111,17 @@ interface MealHistory {
   carbs: number;
   fats: number;
   notes?: string;
+  id: number; // Added id for delete mutation
 }
 
 export default function ProgramLog() {
   const { id } = useParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [dateRange, setDateRange] = useState({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date())
+  });
   const [selectedRoutine, setSelectedRoutine] = useState<string>("");
   const [workoutData, setWorkoutData] = useState<WorkoutLog>({
     routineId: 0,
@@ -128,24 +136,20 @@ export default function ProgramLog() {
     notes: "",
   });
 
-  // Fetch program details
   const { data: program, isLoading } = useQuery<Program>({
     queryKey: [`/api/client/programs/${id}`],
   });
 
-  // Fetch workout history
   const { data: workoutHistory } = useQuery<WorkoutHistory[]>({
     queryKey: [`/api/workouts/${id}`],
     enabled: !!id && program?.type === 'lifting',
   });
 
-  // Add meal history query
   const { data: mealHistory } = useQuery<MealHistory[]>({
     queryKey: [`/api/meals/${id}`],
     enabled: !!id && program?.type === 'diet',
   });
 
-  // Mutation for logging workout
   const logWorkoutMutation = useMutation({
     mutationFn: async (log: WorkoutLog) => {
       const response = await fetch(`/api/workouts`, {
@@ -185,7 +189,6 @@ export default function ProgramLog() {
     },
   });
 
-  // Mutation for logging meal
   const logMealMutation = useMutation({
     mutationFn: async (log: MealLog) => {
       const response = await fetch(`/api/meals`, {
@@ -214,6 +217,35 @@ export default function ProgramLog() {
         description: "Meal logged successfully",
       });
       resetMealForm();
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    },
+  });
+
+  const deleteMealMutation = useMutation({
+    mutationFn: async (mealId: number) => {
+      const response = await fetch(`/api/meals/${mealId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/meals/${id}`] });
+      toast({
+        title: "Success",
+        description: "Meal log deleted successfully",
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -287,6 +319,12 @@ export default function ProgramLog() {
       notes: "",
     });
   };
+
+  const filteredMealHistory = mealHistory?.filter(log => {
+    const logDate = new Date(log.date);
+    return logDate >= dateRange.from && logDate <= dateRange.to;
+  });
+
 
   if (isLoading) {
     return (
@@ -662,11 +700,12 @@ export default function ProgramLog() {
                         <TableHead>Carbs</TableHead>
                         <TableHead>Fats</TableHead>
                         <TableHead>Notes</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mealHistory.map((log) => (
-                        <TableRow key={log.date}>
+                      {filteredMealHistory.map((log) => (
+                        <TableRow key={log.id}>
                           <TableCell>{new Date(log.date).toLocaleDateString('en-US', {
                             weekday: 'short',
                             year: 'numeric',
@@ -674,10 +713,23 @@ export default function ProgramLog() {
                             day: 'numeric'
                           })}</TableCell>
                           <TableCell>{log.calories}</TableCell>
-                          <TableCell>{log.protein}</TableCell>
-                          <TableCell>{log.carbs}</TableCell>
-                          <TableCell>{log.fats}</TableCell>
+                          <TableCell>{log.protein}g</TableCell>
+                          <TableCell>{log.carbs}g</TableCell>
+                          <TableCell>{log.fats}g</TableCell>
                           <TableCell>{log.notes || 'No notes'}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                if (confirm("Are you sure you want to delete this meal log?")) {
+                                  deleteMealMutation.mutate(log.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -696,14 +748,18 @@ export default function ProgramLog() {
             <TabsContent value="analytics">
               <div className="space-y-6">
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle>Macro Trends</CardTitle>
+                    <DateRangePicker
+                      value={dateRange}
+                      onChange={setDateRange}
+                    />
                   </CardHeader>
                   <CardContent className="h-[300px]">
-                    {mealHistory && mealHistory.length > 0 ? (
+                    {filteredMealHistory && filteredMealHistory.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart
-                          data={mealHistory.map(log => ({
+                          data={filteredMealHistory.map(log => ({
                             date: new Date(log.date).toLocaleDateString(),
                             calories: log.calories,
                             protein: log.protein,
@@ -716,10 +772,11 @@ export default function ProgramLog() {
                           <XAxis dataKey="date" />
                           <YAxis />
                           <Tooltip />
-                          <Line type="monotone" dataKey="calories" stroke="#2563eb" />
-                          <Line type="monotone" dataKey="protein" stroke="#16a34a" />
-                          <Line type="monotone" dataKey="carbs" stroke="#ca8a04" />
-                          <Line type="monotone" dataKey="fats" stroke="#dc2626" />
+                          <Legend />
+                          <Line type="monotone" name="Calories" dataKey="calories" stroke="#2563eb" />
+                          <Line type="monotone" name="Protein" dataKey="protein" stroke="#16a34a" />
+                          <Line type="monotone" name="Carbs" dataKey="carbs" stroke="#ca8a04" />
+                          <Line type="monotone" name="Fats" dataKey="fats" stroke="#dc2626" />
                         </LineChart>
                       </ResponsiveContainer>
                     ) : (
@@ -735,14 +792,14 @@ export default function ProgramLog() {
                     <CardTitle>Macro Distribution</CardTitle>
                   </CardHeader>
                   <CardContent className="h-[300px]">
-                    {mealHistory && mealHistory.length > 0 ? (
+                    {filteredMealHistory && filteredMealHistory.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                           data={[{
                             name: 'Latest Meal',
-                            protein: mealHistory[0].protein * 4, // 4 calories per gram
-                            carbs: mealHistory[0].carbs * 4, // 4 calories per gram
-                            fats: mealHistory[0].fats * 9, // 9 calories per gram
+                            protein: filteredMealHistory[0].protein * 4,
+                            carbs: filteredMealHistory[0].carbs * 4,
+                            fats: filteredMealHistory[0].fats * 9,
                           }]}
                           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                         >
@@ -750,9 +807,10 @@ export default function ProgramLog() {
                           <XAxis dataKey="name" />
                           <YAxis />
                           <Tooltip />
-                          <Bar dataKey="protein" fill="#16a34a" name="Protein" />
-                          <Bar dataKey="carbs" fill="#ca8a04" name="Carbs" />
-                          <Bar dataKey="fats" fill="#dc2626" name="Fats" />
+                          <Legend />
+                          <Bar dataKey="protein" name="Protein (cal)" fill="#16a34a" />
+                          <Bar dataKey="carbs" name="Carbs (cal)" fill="#ca8a04" />
+                          <Bar dataKey="fats" name="Fats (cal)" fill="#dc2626" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
