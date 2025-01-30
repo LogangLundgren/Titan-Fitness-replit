@@ -420,7 +420,7 @@ export function registerRoutes(app: Express): Server {
 
     try {
       // Get all programs created by this coach
-      const programs = await db.query.programs.findMany({
+      const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
         with: {
           clientPrograms: {
@@ -439,8 +439,10 @@ export function registerRoutes(app: Express): Server {
         }
       });
 
+      console.log(`[Debug] Found ${coachPrograms.length} programs for coach ${req.user.id}`);
+
       // Transform data for the dashboard
-      const clients = programs.flatMap(program =>
+      const clients = coachPrograms.flatMap(program =>
         program.clientPrograms.map(enrollment => ({
           id: enrollment.client.id,
           name: enrollment.client.fullName,
@@ -449,24 +451,39 @@ export function registerRoutes(app: Express): Server {
           lastActive: enrollment.workoutLogs[0]?.date || enrollment.mealLogs[0]?.date || enrollment.startDate,
           progress: {
             totalWorkouts: enrollment.workoutLogs.length,
-            lastActive: enrollment.workoutLogs[0]?.date || new Date().toISOString(),
-            programCompletion: 0 // To be calculated based on program structure
+            lastActive: enrollment.workoutLogs[0]?.date || enrollment.startDate,
+            programCompletion: Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
           }
         }))
       );
 
+      console.log(`[Debug] Transformed ${clients.length} client records`);
+
       const stats = {
         totalClients: clients.length,
-        activePrograms: programs.length,
-        totalWorkouts: programs.reduce((acc, p) =>
+        activePrograms: coachPrograms.length,
+        totalWorkouts: coachPrograms.reduce((acc, p) =>
           acc + p.clientPrograms.reduce((sum, c) => sum + c.workoutLogs.length, 0), 0
         )
       };
 
-      res.json({ clients, stats });
+      console.log('[Debug] Dashboard stats:', stats);
+
+      res.json({ 
+        clients, 
+        stats,
+        programTypes: {
+          lifting: coachPrograms.filter(p => p.type === 'lifting').length,
+          diet: coachPrograms.filter(p => p.type === 'diet').length,
+          posing: coachPrograms.filter(p => p.type === 'posing').length
+        }
+      });
     } catch (error: any) {
       console.error("Error fetching coach dashboard:", error);
-      res.status(500).send(error.message);
+      res.status(500).json({
+        error: "Failed to fetch dashboard data",
+        details: error.message
+      });
     }
   });
 
