@@ -127,6 +127,8 @@ interface MealHistory {
   fats: number;
   notes?: string;
   id: number;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 const NumberInput = ({ value, onChange, className = "w-20" }: {
@@ -1034,128 +1036,135 @@ export default function ProgramLog() {
 
             <TabsContent value="history">
               <div className="space-y-4">
-                {mealHistory && mealHistory.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Calories</TableHead>
-                        <TableHead>Protein</TableHead>
-                        <TableHead>Carbs</TableHead>
-                        <TableHead>Fats</TableHead>
-                        <TableHead>Notes</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredMealHistory.map((log) => (
-                        <TableRow key={log.id}>
-                          <TableCell>{new Date(log.date).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}</TableCell>
-                          <TableCell>
-                            {editingMealId === log.id ? (
-                              <NumberInput
-                                value={editingMeal?.calories}
-                                onChange={(val) => setEditingMeal(prev => ({ ...prev!, calories: val ?? 0 }))}
-                              />
-                            ) : log.calories}
-                          </TableCell>
-                          <TableCell>
-                            {editingMealId === log.id ? (
-                              <NumberInput
-                                value={editingMeal?.protein}
-                                onChange={(val) => setEditingMeal(prev => ({ ...prev!, protein: val ?? 0 }))}
-                              />
-                            ) : `${log.protein}g`}
-                          </TableCell>
-                          <TableCell>
-                            {editingMealId === log.id ? (
-                              <NumberInput
-                                value={editingMeal?.carbs}
-                                onChange={(val) => setEditingMeal(prev => ({ ...prev!, carbs: val ?? 0 }))}
-                              />
-                            ) : `${log.carbs}g`}
-                          </TableCell>
-                          <TableCell>
-                            {editingMealId === log.id ? (
-                              <NumberInput
-                                value={editingMeal?.fats}
-                                onChange={(val) => setEditingMeal(prev => ({ ...prev!, fats: val ?? 0 }))}
-                              />
-                            ) : `${log.fats}g`}
-                          </TableCell>
-                          <TableCell>
-                            {editingMealId === log.id ? (
-                              <Input
-                                type="text"
-                                value={editingMeal?.notes || ""}
-                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, notes: e.target.value }))}
-                              />
-                            ) : (log.notes || 'No notes')}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              {log.canEdit && editingMealId !== log.id && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditMeal(log)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                              )}
-                              {editingMealId === log.id && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      setEditingMealId(null);
-                                      setEditingMeal(null);
-                                    }}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleSaveMeal(log.id)}
-                                  >
-                                    <Check className="h-4 w-4" />
-                                  </Button>
-                                </>
-                              )}
-                              {log.canDelete && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    if (confirm("Are you sure you want to delete this meal log?")) {
-                                      deleteMealMutation.mutate(log.id);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <Card>
-                    <CardContent className="py-8 text-center">
-                      <p className="text-muted-foreground">No meal logs yet.</p>
-                      <p className="text-sm text-muted-foreground mt-1">Start by logging your first meal!</p>
-                    </CardContent>
-                  </Card>
-                )}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle>Meal History</CardTitle>
+                    <DateRangePicker
+                      value={dateRange}
+                      onChange={setDateRange}
+                    />
+                  </CardHeader>
+                  <CardContent>
+                    {filteredMealHistory && filteredMealHistory.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Calories</TableHead>
+                            <TableHead>Protein (g)</TableHead>
+                            <TableHead>Carbs (g)</TableHead>
+                            <TableHead>Fats (g)</TableHead>
+                            <TableHead>Notes</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredMealHistory.map((log) => (
+                            <TableRow key={log.id}>
+                              <TableCell>{new Date(log.date).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}</TableCell>
+                              <TableCell>
+                                {editingMealId === log.id ? (
+                                  <NumberInput
+                                    value={editingMeal?.calories}
+                                    onChange={(val) => setEditingMeal(prev => ({ ...prev!, calories: val ?? 0 }))}
+                                  />
+                                ) : log.calories}
+                              </TableCell>
+                              <TableCell>
+                                {editingMealId === log.id ? (
+                                  <NumberInput
+                                    value={editingMeal?.protein}
+                                    onChange={(val) => setEditingMeal(prev => ({ ...prev!, protein: val ?? 0 }))}
+                                  />
+                                ) : `${log.protein}g`}
+                              </TableCell>
+                              <TableCell>
+                                {editingMealId === log.id ? (
+                                  <NumberInput
+                                    value={editingMeal?.carbs}
+                                    onChange={(val) => setEditingMeal(prev => ({ ...prev!, carbs: val ?? 0 }))}
+                                  />
+                                ) : `${log.carbs}g`}
+                              </TableCell>
+                              <TableCell>
+                                {editingMealId === log.id ? (
+                                  <NumberInput
+                                    value={editingMeal?.fats}
+                                    onChange={(val) => setEditingMeal(prev => ({ ...prev!, fats: val ?? 0 }))}
+                                  />
+                                ) : `${log.fats}g`}
+                              </TableCell>
+                              <TableCell>
+                                {editingMealId === log.id ? (
+                                  <Input
+                                    type="text"
+                                    value={editingMeal?.notes || ""}
+                                    onChange={(e) => setEditingMeal(prev => ({ ...prev!, notes: e.target.value }))}
+                                  />
+                                ) : (log.notes || 'No notes')}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  {log.canEdit && editingMealId !== log.id && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleEditMeal(log)}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {editingMealId === log.id && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setEditingMealId(null);
+                                          setEditingMeal(null);
+                                        }}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleSaveMeal(log.id)}
+                                      >
+                                        <Check className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  {log.canDelete && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        if (confirm("Are you sure you want to delete this meal log?")) {
+                                          deleteMealMutation.mutate(log.id);
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="py-8 text-center">
+                        <p className="text-muted-foreground">No meal logs available for the selected date range.</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             </TabsContent>
 
