@@ -819,14 +819,14 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Update the GET /api/meals endpoint to filter by clientProgramId
+  //Updated get meal logs
   app.get("/api/meals/:programId", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
     }
 
     try {
-      // First verify the program enrollment exists and belongs to this user
+      // Verify the program enrollment exists and belongs to this user
       const [enrollment] = await db.query.clientPrograms.findMany({
         where: and(
           eq(clientPrograms.id, parseInt(req.params.programId)),
@@ -842,24 +842,37 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Get meal logs for this specific program enrollment
+      // Get meal logs with strict filtering by both clientId and clientProgramId
       const logs = await db.query.mealLogs.findMany({
         where: and(
           eq(mealLogs.clientId, req.user.id),
           eq(mealLogs.clientProgramId, parseInt(req.params.programId))
         ),
         orderBy: [desc(mealLogs.date)],
+        columns: {
+          id: true,
+          date: true,
+          calories: true,
+          protein: true,
+          carbs: true,
+          fats: true,
+          data: true,
+          clientId: true,
+          clientProgramId: true
+        }
       });
 
-      // Transform logs to include edit/delete capabilities
+      console.log(`[Debug] Found ${logs.length} meal logs for client ${req.user.id} in program ${req.params.programId}`);
+
+      // Transform logs with edit/delete capabilities
       const formattedLogs = logs.map(log => ({
         id: log.id,
         date: log.date,
-        calories: log.calories,
-        protein: log.protein,
-        carbs: log.carbs,
-        fats: log.fats,
-        notes: log.data?.notes,
+        calories: log.calories || 0,
+        protein: log.protein || 0,
+        carbs: log.carbs || 0,
+        fats: log.fats || 0,
+        notes: log.data?.notes || '',
         canEdit: true,
         canDelete: true
       }));
@@ -930,7 +943,7 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Fix the GET endpoint to properly include routine and exercise names
+  //Updated workout history
   app.get("/api/workouts/:programId", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
@@ -939,9 +952,12 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log(`[Debug] Fetching workout history for program ${req.params.programId} and user ${req.user.id}`);
 
-      // Get the program details first to have access to routine and exercise names
+      // First verify the program enrollment exists and belongs to this user
       const [enrollment] = await db.query.clientPrograms.findMany({
-        where: eq(clientPrograms.id, parseInt(req.params.programId)),
+        where: and(
+          eq(clientPrograms.id, parseInt(req.params.programId)),
+          eq(clientPrograms.clientId, req.user.id)
+        ),
         with: {
           program: {
             with: {
@@ -959,7 +975,10 @@ export function registerRoutes(app: Express): Server {
       });
 
       if (!enrollment) {
-        return res.status(404).send("Program enrollment not found");
+        return res.status(404).json({
+          error: "Program enrollment not found",
+          message: "The requested program enrollment does not exist or you don't have access to it"
+        });
       }
 
       // Create maps for quick lookups
@@ -974,7 +993,7 @@ export function registerRoutes(app: Express): Server {
         });
       });
 
-      // Fetch workout logs with sorting by date descending
+      // Fetch workout logs with strict filtering by both clientId and clientProgramId
       const logs = await db.query.workoutLogs.findMany({
         where: and(
           eq(workoutLogs.clientId, req.user.id),
@@ -986,13 +1005,12 @@ export function registerRoutes(app: Express): Server {
           date: true,
           routineId: true,
           data: true,
+          clientId: true,
+          clientProgramId: true
         }
       });
 
-      console.log(`[Debug] Found ${logs.length} workout logs`);
-      if (logs.length > 0) {
-        console.log('[Debug] First log data:', logs[0].data);
-      }
+      console.log(`[Debug] Found ${logs.length} workout logs for client ${req.user.id} in program ${req.params.programId}`);
 
       // Format logs using the stored routine name and exercise data
       const formattedLogs = logs.map(log => {
@@ -1001,24 +1019,24 @@ export function registerRoutes(app: Express): Server {
           id: log.id,
           date: log.date,
           routineId: log.routineId,
-          routineName: routine?.name || log.data?.routineName || 'Unknown Routine',
-          exercises: (log.data?.exerciseLogs || []).map((ex: any) => ({
-            name: exerciseMap.get(ex.exerciseId)?.name || ex.exerciseName || 'Unknown Exercise',
-            sets: ex.sets.map((set: any) => ({
-              weight: parseInt(set.weight || '0'),
-              reps: parseInt(set.reps || '0')
-            }))
-          })),
-          notes: log.data?.notes || '',
+          routineName: routine?.name || "Unknown Routine",
+          exercises: log.data?.exerciseLogs?.map((exerciseLog: any) => {
+            const exercise = exerciseMap.get(exerciseLog.exerciseId);
+            return {
+              id: exerciseLog.exerciseId,
+              name: exercise?.name || "Unknown Exercise",
+              sets: exerciseLog.sets || []
+            };
+          }) || [],
+          notes: log.data?.notes,
           canDelete: true,
           canEdit: true
         };
       });
 
-      console.log('[Debug] First formatted log:', JSON.stringify(formattedLogs[0], null, 2));
       res.json(formattedLogs);
     } catch (error: any) {
-      console.error("Error fetching workout history:", error);
+      console.error("Error fetching workout logs:", error);
       res.status(500).send(error.message);
     }
   });
