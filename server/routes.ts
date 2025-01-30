@@ -654,7 +654,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Add PUT endpoint for updating workout logs
+  // Update workout log endpoint
   app.put("/api/workouts/:id", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
@@ -670,21 +670,6 @@ export function registerRoutes(app: Express): Server {
           eq(workoutLogs.id, logId),
           eq(workoutLogs.clientId, req.user.id)
         ),
-        with: {
-          clientProgram: {
-            with: {
-              program: {
-                with: {
-                  routines: {
-                    with: {
-                      exercises: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
         limit: 1
       });
 
@@ -695,37 +680,16 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Get the routine and exercise information
-      const routine = workoutLog.clientProgram?.program?.routines.find(r => r.id === workoutLog.routineId);
-      if (!routine) {
-        return res.status(404).send("Routine not found");
-      }
-
-      // Create exercise map for validation and name lookup
-      const exerciseMap = new Map(
-        routine.exercises.map(ex => [ex.id, ex])
-      );
-
-      // Validate and transform exercise logs
-      const exerciseLogs = data.exerciseLogs.map((log: any) => {
-        const exercise = exerciseMap.get(log.exerciseId);
-        return {
-          exerciseId: log.exerciseId,
-          exerciseName: exercise?.name || 'Unknown Exercise',
-          sets: log.sets.map((set: any) => ({
-            weight: set.weight,
-            reps: set.reps
-          }))
-        };
-      });
-
-      // Update the workout log
+      // Update the workout log with the new data
       const [updatedLog] = await db
         .update(workoutLogs)
         .set({
           data: {
-            exerciseLogs,
-            routineName: routine.name,
+            exerciseLogs: data.exerciseLogs.map(log => ({
+              exerciseId: log.exerciseId,
+              exerciseName: log.exerciseName,
+              sets: log.sets
+            })),
             notes: data.notes
           }
         })

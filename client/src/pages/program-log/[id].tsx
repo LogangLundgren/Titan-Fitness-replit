@@ -1,3 +1,15 @@
+<style jsx global>{`
+  /* Remove spinners for number inputs */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+`}</style>
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Loader2, Plus, Trash2, Pencil, X, Check } from "lucide-react";
@@ -116,6 +128,31 @@ interface MealHistory {
   notes?: string;
   id: number;
 }
+
+const NumberInput = ({ value, onChange, className = "w-20" }: {
+  value: number | undefined | null,
+  onChange: (value: number | null) => void,
+  className?: string
+}) => (
+  <Input
+    type="text"
+    className={className}
+    value={value ?? ""}
+    onChange={(e) => {
+      const val = e.target.value;
+      if (val === "") {
+        onChange(null);
+      } else {
+        const num = parseFloat(val);
+        if (!isNaN(num)) {
+          onChange(num);
+        }
+      }
+    }}
+    pattern="[0-9]*\.?[0-9]*"
+  />
+);
+
 
 export default function ProgramLog() {
   const { id } = useParams();
@@ -562,20 +599,16 @@ export default function ProgramLog() {
                                 <TableRow key={setIndex}>
                                   <TableCell className="font-medium">{setIndex + 1}</TableCell>
                                   <TableCell>
-                                    <Input
-                                      type="number"
-                                      placeholder="0"
-                                      value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.weight || ""}
-                                      onChange={(e) => updateSetData(exerciseIndex, setIndex, 'weight', e.target.value)}
+                                    <NumberInput
+                                      value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.weight}
+                                      onChange={(val) => updateSetData(exerciseIndex, setIndex, 'weight', val === null ? "" : val.toString())}
                                       className="w-24"
                                     />
                                   </TableCell>
                                   <TableCell>
-                                    <Input
-                                      type="number"
-                                      placeholder="0"
-                                      value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.reps || ""}
-                                      onChange={(e) => updateSetData(exerciseIndex, setIndex, 'reps', e.target.value)}
+                                    <NumberInput
+                                      value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.reps}
+                                      onChange={(val) => updateSetData(exerciseIndex, setIndex, 'reps', val === null ? "" : val.toString())}
                                       className="w-20"
                                     />
                                   </TableCell>
@@ -733,24 +766,20 @@ export default function ProgramLog() {
                                       {editingWorkoutId === log.id ? (
                                         exercise.sets.map((set, setIndex) => (
                                           <div key={setIndex} className="flex items-center gap-2">
-                                            <Input
-                                              type="number"
-                                              className="w-20"
-                                              value={editingWorkout?.exerciseLogs[index]?.sets[setIndex]?.weight || set.weight}
-                                              onChange={(e) => {
+                                            <NumberInput
+                                              value={editingWorkout?.exerciseLogs[index]?.sets[setIndex]?.weight}
+                                              onChange={(val) => {
                                                 const newWorkout = { ...editingWorkout! };
-                                                newWorkout.exerciseLogs[index].sets[setIndex].weight = parseInt(e.target.value, 10);
+                                                newWorkout.exerciseLogs[index].sets[setIndex].weight = val ?? 0;
                                                 setEditingWorkout(newWorkout);
                                               }}
                                             />
                                             <span>lbs ×</span>
-                                            <Input
-                                              type="number"
-                                              className="w-20"
-                                              value={editingWorkout?.exerciseLogs[index]?.sets[setIndex]?.reps || set.reps}
-                                              onChange={(e) => {
+                                            <NumberInput
+                                              value={editingWorkout?.exerciseLogs[index]?.sets[setIndex]?.reps}
+                                              onChange={(val) => {
                                                 const newWorkout = { ...editingWorkout! };
-                                                newWorkout.exerciseLogs[index].sets[setIndex].reps = parseInt(e.target.value, 10);
+                                                newWorkout.exerciseLogs[index].sets[setIndex].reps = val ?? 0;
                                                 setEditingWorkout(newWorkout);
                                               }}
                                             />
@@ -918,51 +947,31 @@ export default function ProgramLog() {
                     <div className="space-y-4">
                       <div>
                         <Label>Calories</Label>
-                        <Input
-                          type="number"
-                          placeholder="Enter calories"
-                          value={mealData.calories || ""}
-                          onChange={(e) => setMealData(prev => ({
-                            ...prev,
-                            calories: e.target.value ? parseInt(e.target.value, 10) : 0
-                          }))}
+                        <NumberInput
+                          value={mealData.calories}
+                          onChange={(val) => setMealData(prev => ({ ...prev, calories: val ?? 0 }))}
                         />
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <Label>Protein (g)</Label>
-                          <Input
-                            type="number"
-                            placeholder="0"
-                            value={mealData.protein || ""}
-                            onChange={(e) => setMealData(prev => ({
-                              ...prev,
-                              protein: e.target.value ? parseInt(e.target.value, 10) : 0
-                            }))}
+                          <NumberInput
+                            value={mealData.protein}
+                            onChange={(val) => setMealData(prev => ({ ...prev, protein: val ?? 0 }))}
                           />
                         </div>
                         <div>
                           <Label>Carbs (g)</Label>
-                          <Input
-                            type="number"
-                            placeholder="0"
-                            value={mealData.carbs || ""}
-                            onChange={(e) => setMealData(prev => ({
-                              ...prev,
-                              carbs: e.target.value ? parseInt(e.target.value, 10) : 0
-                            }))}
+                          <NumberInput
+                            value={mealData.carbs}
+                            onChange={(val) => setMealData(prev => ({ ...prev, carbs: val ?? 0 }))}
                           />
                         </div>
                         <div>
                           <Label>Fats (g)</Label>
-                          <Input
-                            type="number"
-                            placeholder="0"
-                            value={mealData.fats || ""}
-                            onChange={(e) => setMealData(prev => ({
-                              ...prev,
-                              fats: e.target.value ? parseInt(e.target.value, 10) : 0
-                            }))}
+                          <NumberInput
+                            value={mealData.fats}
+                            onChange={(val) => setMealData(prev => ({ ...prev, fats: val ?? 0 }))}
                           />
                         </div>
                       </div>
@@ -1003,24 +1012,24 @@ export default function ProgramLog() {
                     />
                   </CardContent>
                 </Card>
-                </div>
-                <div className="md:col-span-2 flex justify-end gap-4">
-                  <Button
-                    variant="outline"
-                    onClick={resetMealForm}
-                  >
-                    Clear
-                                    </Button>
-                  <Button
-                    onClick={handleMealSubmit}
-                    disabled={logMealMutation.isPending}
-                  >
-                    {logMealMutation.isPending && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Save Meal
-                  </Button>
-                </div>
+              </div>
+              <div className="md:col-span-2 flex justify-end gap-4">
+                <Button
+                  variant="outline"
+                  onClick={resetMealForm}
+                >
+                  Clear
+                </Button>
+                <Button
+                  onClick={handleMealSubmit}
+                  disabled={logMealMutation.isPending}
+                >
+                  {logMealMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Save Meal
+                </Button>
+              </div>
             </TabsContent>
 
             <TabsContent value="history">
@@ -1049,41 +1058,33 @@ export default function ProgramLog() {
                           })}</TableCell>
                           <TableCell>
                             {editingMealId === log.id ? (
-                              <Input
-                                type="number"
-                                className="w-20"
-                                value={editingMeal?.calories || ""}
-                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, calories: parseInt(e.target.value) }))}
+                              <NumberInput
+                                value={editingMeal?.calories}
+                                onChange={(val) => setEditingMeal(prev => ({ ...prev!, calories: val ?? 0 }))}
                               />
                             ) : log.calories}
                           </TableCell>
                           <TableCell>
                             {editingMealId === log.id ? (
-                              <Input
-                                type="number"
-                                className="w-20"
-                                value={editingMeal?.protein || ""}
-                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, protein: parseInt(e.target.value) }))}
+                              <NumberInput
+                                value={editingMeal?.protein}
+                                onChange={(val) => setEditingMeal(prev => ({ ...prev!, protein: val ?? 0 }))}
                               />
                             ) : `${log.protein}g`}
                           </TableCell>
                           <TableCell>
                             {editingMealId === log.id ? (
-                              <Input
-                                type="number"
-                                className="w-20"
-                                value={editingMeal?.carbs || ""}
-                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, carbs: parseInt(e.target.value) }))}
+                              <NumberInput
+                                value={editingMeal?.carbs}
+                                onChange={(val) => setEditingMeal(prev => ({ ...prev!, carbs: val ?? 0 }))}
                               />
                             ) : `${log.carbs}g`}
                           </TableCell>
                           <TableCell>
                             {editingMealId === log.id ? (
-                              <Input
-                                type="number"
-                                className="w-20"
-                                value={editingMeal?.fats || ""}
-                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, fats: parseInt(e.target.value) }))}
+                              <NumberInput
+                                value={editingMeal?.fats}
+                                onChange={(val) => setEditingMeal(prev => ({ ...prev!, fats: val ?? 0 }))}
                               />
                             ) : `${log.fats}g`}
                           </TableCell>
