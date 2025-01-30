@@ -544,7 +544,7 @@ export function registerRoutes(app: Express): Server {
       // Verify the client has access to this program
       const [enrollment] = await db.query.clientPrograms.findMany({
         where: and(
-          eq(clientPrograms.id, clientProgramId),
+          eq(clientPrograms.programId, clientProgramId),
           eq(clientPrograms.clientId, req.user.id)
         ),
         limit: 1,
@@ -585,7 +585,7 @@ export function registerRoutes(app: Express): Server {
           },
           lastModified: new Date(),
         })
-        .where(eq(clientPrograms.id, clientProgramId));
+        .where(eq(clientPrograms.id, enrollment.id));
 
       res.json(log);
     } catch (error: any) {
