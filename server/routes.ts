@@ -715,7 +715,7 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Get workout history for a program
+  // Get workout history for a specific program
   app.get("/api/workouts/:programId", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
@@ -733,14 +733,23 @@ export function registerRoutes(app: Express): Server {
         }
       });
 
-      res.json(workoutLogs);
+      const formattedLogs = workoutLogs.map(log => ({
+        id: log.id,
+        date: log.date,
+        routineId: log.routineId,
+        routineName: log.routine?.name || 'Unknown Routine',
+        data: log.data,
+        notes: log.data?.notes
+      }));
+
+      res.json(formattedLogs);
     } catch (error: any) {
       console.error("Error fetching workout history:", error);
       res.status(500).send(error.message);
     }
   });
 
-  // Get meal history for a program
+  // Get meal history for a specific program
   app.get("/api/meals/:programId", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
@@ -755,7 +764,18 @@ export function registerRoutes(app: Express): Server {
         orderBy: [desc(mealLogs.date)]
       });
 
-      res.json(mealLogs);
+      const formattedLogs = mealLogs.map(log => ({
+        id: log.id,
+        date: log.date,
+        calories: log.calories || 0,
+        protein: log.protein || 0,
+        carbs: log.carbs || 0,
+        fats: log.fat || 0,
+        notes: log.data?.notes,
+        data: log.data
+      }));
+
+      res.json(formattedLogs);
     } catch (error: any) {
       console.error("Error fetching meal history:", error);
       res.status(500).send(error.message);
