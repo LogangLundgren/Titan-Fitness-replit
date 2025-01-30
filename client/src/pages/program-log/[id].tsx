@@ -81,7 +81,7 @@ interface MealLog {
   calories: number;
   protein: number;
   carbs: number;
-  fat: number;
+  fats: number;
   notes?: string;
 }
 
@@ -99,19 +99,19 @@ export default function ProgramLog() {
     calories: 0,
     protein: 0,
     carbs: 0,
-    fat: 0,
+    fats: 0,
     notes: "",
   });
 
   // Fetch program details
   const { data: program, isLoading } = useQuery<Program>({
-    queryKey: ["/api/client/programs", id],
+    queryKey: [`/api/client/programs/${id}`],
   });
 
   // Fetch workout history
   const { data: workoutHistory } = useQuery({
-    queryKey: ["/api/workouts", id],
-    enabled: !!program,
+    queryKey: [`/api/workouts/${id}`],
+    enabled: !!id,
   });
 
   // Mutation for logging workout
@@ -124,7 +124,7 @@ export default function ProgramLog() {
         },
         credentials: "include",
         body: JSON.stringify({
-          clientProgramId: parseInt(id),
+          clientProgramId: parseInt(id!),
           routineId: log.routineId,
           data: log,
         }),
@@ -137,8 +137,8 @@ export default function ProgramLog() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/client/programs", id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/workouts", id] });
+      queryClient.invalidateQueries({ queryKey: [`/api/client/programs/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/workouts/${id}`] });
       toast({
         title: "Success",
         description: "Workout logged successfully",
@@ -164,7 +164,7 @@ export default function ProgramLog() {
         },
         credentials: "include",
         body: JSON.stringify({
-          clientProgramId: parseInt(id),
+          clientProgramId: parseInt(id!),
           data: log,
         }),
       });
@@ -176,8 +176,8 @@ export default function ProgramLog() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/client/programs", id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/meals", id] });
+      queryClient.invalidateQueries({ queryKey: [`/api/client/programs/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/meals/${id}`] });
       toast({
         title: "Success",
         description: "Meal logged successfully",
@@ -211,10 +211,12 @@ export default function ProgramLog() {
   const updateSetData = (exerciseIndex: number, setIndex: number, field: keyof typeof workoutData.exerciseLogs[0]["sets"][0], value: string) => {
     setWorkoutData(prev => {
       const newData = { ...prev };
-      newData.exerciseLogs[exerciseIndex].sets[setIndex] = {
-        ...newData.exerciseLogs[exerciseIndex].sets[setIndex],
-        [field]: field === 'reps' ? parseInt(value) : parseFloat(value),
-      };
+      if (newData.exerciseLogs[exerciseIndex]) {
+        newData.exerciseLogs[exerciseIndex].sets[setIndex] = {
+          ...newData.exerciseLogs[exerciseIndex].sets[setIndex],
+          [field]: field === 'reps' ? parseInt(value) : parseFloat(value),
+        };
+      }
       return newData;
     });
   };
@@ -250,7 +252,7 @@ export default function ProgramLog() {
       calories: 0,
       protein: 0,
       carbs: 0,
-      fat: 0,
+      fats: 0,
       notes: "",
     });
   };
@@ -280,226 +282,180 @@ export default function ProgramLog() {
     );
   }
 
-  function renderContent(type: string) {
-    switch (type) {
-      case "lifting":
-        return (
-          <Tabs defaultValue="workout">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="workout">Workout Log</TabsTrigger>
-              <TabsTrigger value="history">
-                <History className="w-4 h-4 mr-2" />
-                History
-              </TabsTrigger>
-              <TabsTrigger value="analytics">
-                <BarChart3 className="w-4 h-4 mr-2" />
-                Analytics
-              </TabsTrigger>
-              <TabsTrigger value="chat">
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Chat
-              </TabsTrigger>
-            </TabsList>
+  return (
+    <div className="max-w-4xl mx-auto py-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">{program.name}</h1>
+        <p className="text-sm text-muted-foreground">{program.description}</p>
+      </div>
 
-            <TabsContent value="workout">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Log Workout</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <Label>Select Routine</Label>
-                    <Select value={selectedRoutine} onValueChange={handleRoutineSelect}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a routine" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {program.routines?.map((routine) => (
-                          <SelectItem key={routine.id} value={routine.id.toString()}>
-                            {routine.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+      {program.type === 'lifting' ? (
+        <Card>
+          <CardContent className="pt-6">
+            <Tabs defaultValue="log" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="log">Log Workout</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              </TabsList>
 
-                  {selectedRoutine && (
-                    <>
-                      <div className="space-y-4">
-                        {program.routines
-                          ?.find(r => r.id.toString() === selectedRoutine)
-                          ?.exercises.map((exercise, exerciseIndex) => (
-                            <Card key={exercise.id}>
-                              <CardHeader>
-                                <CardTitle className="text-lg">{exercise.name}</CardTitle>
-                                {exercise.notes && (
-                                  <p className="text-sm text-muted-foreground">{exercise.notes}</p>
-                                )}
-                              </CardHeader>
-                              <CardContent>
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Set</TableHead>
-                                      <TableHead>Weight (lbs)</TableHead>
-                                      <TableHead>Reps</TableHead>
-                                      <TableHead>Notes</TableHead>
+              <TabsContent value="log" className="space-y-4">
+                <div>
+                  <Label>Select Routine</Label>
+                  <Select value={selectedRoutine} onValueChange={handleRoutineSelect}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a routine" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {program.routines?.map((routine) => (
+                        <SelectItem key={routine.id} value={routine.id.toString()}>
+                          {routine.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedRoutine && (
+                  <>
+                    <div className="space-y-4">
+                      {program.routines
+                        ?.find(r => r.id.toString() === selectedRoutine)
+                        ?.exercises.map((exercise, exerciseIndex) => (
+                          <Card key={exercise.id}>
+                            <CardHeader>
+                              <CardTitle className="text-lg">{exercise.name}</CardTitle>
+                              {exercise.notes && (
+                                <p className="text-sm text-muted-foreground">{exercise.notes}</p>
+                              )}
+                            </CardHeader>
+                            <CardContent>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Set</TableHead>
+                                    <TableHead>Weight (lbs)</TableHead>
+                                    <TableHead>Reps</TableHead>
+                                    <TableHead>Notes</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {Array(exercise.sets).fill(0).map((_, setIndex) => (
+                                    <TableRow key={setIndex}>
+                                      <TableCell>{setIndex + 1}</TableCell>
+                                      <TableCell>
+                                        <Input
+                                          type="number"
+                                          placeholder="0"
+                                          value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.weight || ""}
+                                          onChange={(e) => updateSetData(exerciseIndex, setIndex, 'weight', e.target.value)}
+                                          className="w-20"
+                                        />
+                                      </TableCell>
+                                      <TableCell>
+                                        <Input
+                                          type="number"
+                                          placeholder="0"
+                                          value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.reps || ""}
+                                          onChange={(e) => updateSetData(exerciseIndex, setIndex, 'reps', e.target.value)}
+                                          className="w-20"
+                                        />
+                                      </TableCell>
+                                      <TableCell>
+                                        <Input
+                                          type="text"
+                                          placeholder="Optional notes"
+                                          value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.notes || ""}
+                                          onChange={(e) => updateSetData(exerciseIndex, setIndex, 'notes', e.target.value)}
+                                        />
+                                      </TableCell>
                                     </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {Array(exercise.sets).fill(0).map((_, setIndex) => (
-                                      <TableRow key={setIndex}>
-                                        <TableCell>{setIndex + 1}</TableCell>
-                                        <TableCell>
-                                          <Input
-                                            type="number"
-                                            placeholder="0"
-                                            value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.weight || ""}
-                                            onChange={(e) => updateSetData(exerciseIndex, setIndex, 'weight', e.target.value)}
-                                            className="w-20"
-                                          />
-                                        </TableCell>
-                                        <TableCell>
-                                          <Input
-                                            type="number"
-                                            placeholder="0"
-                                            value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.reps || ""}
-                                            onChange={(e) => updateSetData(exerciseIndex, setIndex, 'reps', e.target.value)}
-                                            className="w-20"
-                                          />
-                                        </TableCell>
-                                        <TableCell>
-                                          <Input
-                                            type="text"
-                                            placeholder="Optional notes"
-                                            value={workoutData.exerciseLogs[exerciseIndex]?.sets[setIndex]?.notes || ""}
-                                            onChange={(e) => updateSetData(exerciseIndex, setIndex, 'notes', e.target.value)}
-                                            className="w-full"
-                                          />
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              </CardContent>
-                            </Card>
-                          ))}
-                      </div>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </div>
 
-                      <div>
-                        <Label>Workout Notes</Label>
-                        <Textarea
-                          value={workoutData.notes}
-                          onChange={(e) => setWorkoutData(prev => ({ ...prev, notes: e.target.value }))}
-                          placeholder="Add any notes about your workout..."
-                          className="h-32"
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <Label>Workout Notes</Label>
+                      <Textarea
+                        value={workoutData.notes}
+                        onChange={(e) => setWorkoutData(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="Add any notes about your workout..."
+                        className="h-32"
+                      />
+                    </div>
 
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={handleSubmit}
-                          disabled={logWorkoutMutation.isPending}
-                        >
-                          {logWorkoutMutation.isPending && (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          )}
-                          Save Workout
-                        </Button>
-                      </div>
-                    </>
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={handleSubmit}
+                        disabled={logWorkoutMutation.isPending}
+                      >
+                        {logWorkoutMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Save Workout
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="history">
+                <div className="space-y-4">
+                  {workoutHistory ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Routine</TableHead>
+                          <TableHead>Notes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {program.progress?.completed.map((routineId, index) => {
+                          const routine = program.routines?.find(r => r.id.toString() === routineId);
+                          const note = program.progress?.notes?.find(n => n.routineId.toString() === routineId);
+                          return (
+                            <TableRow key={index}>
+                              <TableCell>{note?.date ? new Date(note.date).toLocaleDateString() : 'N/A'}</TableCell>
+                              <TableCell>{routine?.name || 'Unknown'}</TableCell>
+                              <TableCell>{note?.note || 'No notes'}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-muted-foreground">No workout history available.</p>
                   )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </div>
+              </TabsContent>
 
-            <TabsContent value="history">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Workout History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {workoutHistory ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Routine</TableHead>
-                            <TableHead>Notes</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {program.progress?.completed.map((routineId, index) => {
-                            const routine = program.routines?.find(r => r.id.toString() === routineId);
-                            const note = program.progress?.notes?.find(n => n.routineId.toString() === routineId);
-                            return (
-                              <TableRow key={index}>
-                                <TableCell>{note?.date ? new Date(note.date).toLocaleDateString() : 'N/A'}</TableCell>
-                                <TableCell>{routine?.name || 'Unknown'}</TableCell>
-                                <TableCell>{note?.note || 'No notes'}</TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    ) : (
-                      <p className="text-muted-foreground">No workout history available.</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="analytics">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Analytics</CardTitle>
-                </CardHeader>
-                <CardContent>
+              <TabsContent value="analytics">
+                <div className="text-center py-8">
                   <p className="text-muted-foreground">
-                    Coming soon: Charts and progress tracking for your workouts.
+                    Analytics coming soon
                   </p>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      ) : program.type === 'diet' ? (
+        <Card>
+          <CardContent className="pt-6">
+            <Tabs defaultValue="log" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="log">Log Meal</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="chat">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Chat with Coach</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">
-                    Coming soon: Direct messaging with your coach.
-                  </p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        );
-
-      case "diet":
-        return (
-          <Tabs defaultValue="meal">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="meal">Log Meal</TabsTrigger>
-              <TabsTrigger value="history">
-                <History className="w-4 h-4 mr-2" />
-                History
-              </TabsTrigger>
-              <TabsTrigger value="chat">
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Chat
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="meal">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Log Meal</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
+              <TabsContent value="log">
+                <div className="space-y-6">
                   <div className="space-y-4">
                     <div>
                       <Label>Calories</Label>
@@ -540,14 +496,14 @@ export default function ProgramLog() {
                         />
                       </div>
                       <div>
-                        <Label>Fat (g)</Label>
+                        <Label>Fats (g)</Label>
                         <Input
                           type="number"
                           placeholder="0"
-                          value={mealData.fat || ""}
+                          value={mealData.fats || ""}
                           onChange={(e) => setMealData(prev => ({
                             ...prev,
-                            fat: e.target.value ? parseInt(e.target.value) : 0
+                            fats: e.target.value ? parseInt(e.target.value) : 0
                           }))}
                         />
                       </div>
@@ -575,83 +531,62 @@ export default function ProgramLog() {
                       Save Meal Log
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </div>
+              </TabsContent>
 
-            <TabsContent value="history">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Meal History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Calories</TableHead>
-                        <TableHead>Protein</TableHead>
-                        <TableHead>Carbs</TableHead>
-                        <TableHead>Fat</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {program?.progress?.completed.map((entry, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{new Date(entry).toLocaleDateString()}</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>-</TableCell>
+              <TabsContent value="history">
+                <div className="space-y-4">
+                  {program.progress?.completed.length ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Calories</TableHead>
+                          <TableHead>Protein</TableHead>
+                          <TableHead>Carbs</TableHead>
+                          <TableHead>Fats</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                      </TableHeader>
+                      <TableBody>
+                        {program.progress.completed.map((entry, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{new Date(entry).toLocaleDateString()}</TableCell>
+                            <TableCell>-</TableCell>
+                            <TableCell>-</TableCell>
+                            <TableCell>-</TableCell>
+                            <TableCell>-</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-muted-foreground">No meal logs yet. Start by logging your first meal!</p>
+                  )}
+                </div>
+              </TabsContent>
 
-            <TabsContent value="chat">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Chat with Coach</CardTitle>
-                </CardHeader>
-                <CardContent>
+              <TabsContent value="analytics">
+                <div className="text-center py-8">
                   <p className="text-muted-foreground">
-                    Coming soon: Direct messaging with your coach.
+                    Analytics coming soon
                   </p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        );
-
-      case "posing":
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Chat with Coach</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Coming soon: Direct messaging with your coach for posing feedback.
-              </p>
-            </CardContent>
-          </Card>
-        );
-
-      default:
-        return null;
-    }
-  }
-
-  return (
-    <div className="max-w-4xl mx-auto py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">{program.name}</h1>
-        <p className="text-sm text-muted-foreground">{program.description}</p>
-      </div>
-      {renderContent(program.type)}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Posing Program</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              This program type is currently under development.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

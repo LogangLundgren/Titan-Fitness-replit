@@ -66,8 +66,8 @@ export function ProgramCard({
         description: "Successfully enrolled in program",
       });
 
-      // Redirect to the program page after enrollment
       const enrolledProgram = await response.json();
+      // Redirect to the program log page after enrollment
       setLocation(`/programs/${enrolledProgram.enrollmentId}/log`);
     } catch (error: any) {
       toast({
@@ -79,7 +79,7 @@ export function ProgramCard({
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // Prevent click if clicking on a button
+    // Don't trigger if clicking on a button
     if ((e.target as HTMLElement).closest('button')) {
       return;
     }
@@ -87,7 +87,7 @@ export function ProgramCard({
     if (!user) return;
 
     if (user.accountType === "client" && isClientProgram) {
-      // For client programs, use the enrollment ID for logging
+      // For clients, use enrollmentId for program logs
       setLocation(`/programs/${(program as ClientProgram).enrollmentId}/log`);
     } else if (user.accountType === "coach" && !isClientProgram) {
       // For coaches viewing their own programs
