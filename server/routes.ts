@@ -715,6 +715,53 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
+  // Get workout history for a program
+  app.get("/api/workouts/:programId", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const workoutLogs = await db.query.workoutLogs.findMany({
+        where: and(
+          eq(workoutLogs.clientProgramId, parseInt(req.params.programId)),
+          eq(workoutLogs.clientId, req.user.id)
+        ),
+        orderBy: [desc(workoutLogs.date)],
+        with: {
+          routine: true
+        }
+      });
+
+      res.json(workoutLogs);
+    } catch (error: any) {
+      console.error("Error fetching workout history:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Get meal history for a program
+  app.get("/api/meals/:programId", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const mealLogs = await db.query.mealLogs.findMany({
+        where: and(
+          eq(mealLogs.clientProgramId, parseInt(req.params.programId)),
+          eq(mealLogs.clientId, req.user.id)
+        ),
+        orderBy: [desc(mealLogs.date)]
+      });
+
+      res.json(mealLogs);
+    } catch (error: any) {
+      console.error("Error fetching meal history:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
   app.get("/api/profile", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
