@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Pencil, X, Check } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -100,8 +100,11 @@ interface WorkoutHistory {
       weight: number;
       reps: number;
     }>;
+    id: number; // Added exerciseId
   }>;
   notes?: string;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 interface MealHistory {
@@ -354,6 +357,134 @@ export default function ProgramLog() {
     return logDate >= dateRange.from && logDate <= dateRange.to;
   });
 
+  const updateWorkoutMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: WorkoutLog }) => {
+      const response = await fetch(`/api/workouts/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ data }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/workouts/${id}`] });
+      toast({
+        title: "Success",
+        description: "Workout updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    },
+  });
+
+  const [editingWorkoutId, setEditingWorkoutId] = useState<number | null>(null);
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutLog | null>(null);
+
+  const handleEditWorkout = (workout: WorkoutHistory) => {
+    setEditingWorkoutId(workout.id);
+    setEditingWorkout({
+      routineId: workout.routineId,
+      exerciseLogs: workout.exercises.map(ex => ({
+        exerciseId: ex.id,
+        sets: ex.sets.map(set => ({
+          weight: set.weight,
+          reps: set.reps,
+        })),
+      })),
+      notes: workout.notes || "",
+    });
+  };
+
+  const handleSaveWorkout = async (workoutId: number) => {
+    if (!editingWorkout) return;
+
+    try {
+      await updateWorkoutMutation.mutateAsync({
+        id: workoutId,
+        data: editingWorkout,
+      });
+      setEditingWorkoutId(null);
+      setEditingWorkout(null);
+    } catch (error) {
+      console.error("Error updating workout:", error);
+    }
+  };
+
+
+  const updateMealMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: MealLog }) => {
+      const response = await fetch(`/api/meals/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ data }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/meals/${id}`] });
+      toast({
+        title: "Success",
+        description: "Meal log updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    },
+  });
+
+  const [editingMealId, setEditingMealId] = useState<number | null>(null);
+  const [editingMeal, setEditingMeal] = useState<MealLog | null>(null);
+
+  const handleEditMeal = (meal: MealHistory) => {
+    setEditingMealId(meal.id);
+    setEditingMeal({
+      calories: meal.calories,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fats: meal.fats || 0,
+      notes: meal.notes || "",
+    });
+  };
+
+  const handleSaveMeal = async (mealId: number) => {
+    if (!editingMeal) return;
+
+    try {
+      await updateMealMutation.mutateAsync({
+        id: mealId,
+        data: editingMeal,
+      });
+      setEditingMealId(null);
+      setEditingMeal(null);
+    } catch (error) {
+      console.error("Error updating meal:", error);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -537,17 +668,51 @@ export default function ProgramLog() {
                               })}
                             </p>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              if (confirm("Are you sure you want to delete this workout log?")) {
-                                deleteWorkoutMutation.mutate(log.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            {log.canEdit && editingWorkoutId !== log.id && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEditWorkout(log)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {editingWorkoutId === log.id && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingWorkoutId(null);
+                                    setEditingWorkout(null);
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleSaveWorkout(log.id)}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                            {log.canDelete && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  if (confirm("Are you sure you want to delete this workout log?")) {
+                                    deleteWorkoutMutation.mutate(log.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </CardHeader>
                         <CardContent>
                           <Table>
@@ -565,21 +730,58 @@ export default function ProgramLog() {
                                   </TableCell>
                                   <TableCell>
                                     <div className="space-y-1">
-                                      {exercise.sets.map((set, setIndex) => (
-                                        <div key={setIndex} className="text-sm">
-                                          Set {setIndex + 1}: {set.weight}lbs × {set.reps} reps
-                                        </div>
-                                      ))}
+                                      {editingWorkoutId === log.id ? (
+                                        exercise.sets.map((set, setIndex) => (
+                                          <div key={setIndex} className="flex items-center gap-2">
+                                            <Input
+                                              type="number"
+                                              className="w-20"
+                                              value={editingWorkout?.exerciseLogs[index]?.sets[setIndex]?.weight || set.weight}
+                                              onChange={(e) => {
+                                                const newWorkout = { ...editingWorkout! };
+                                                newWorkout.exerciseLogs[index].sets[setIndex].weight = parseInt(e.target.value, 10);
+                                                setEditingWorkout(newWorkout);
+                                              }}
+                                            />
+                                            <span>lbs ×</span>
+                                            <Input
+                                              type="number"
+                                              className="w-20"
+                                              value={editingWorkout?.exerciseLogs[index]?.sets[setIndex]?.reps || set.reps}
+                                              onChange={(e) => {
+                                                const newWorkout = { ...editingWorkout! };
+                                                newWorkout.exerciseLogs[index].sets[setIndex].reps = parseInt(e.target.value, 10);
+                                                setEditingWorkout(newWorkout);
+                                              }}
+                                            />
+                                            <span>reps</span>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        exercise.sets.map((set, setIndex) => (
+                                          <div key={setIndex} className="text-sm">
+                                            Set {setIndex + 1}: {set.weight}lbs × {set.reps} reps
+                                          </div>
+                                        ))
+                                      )}
                                     </div>
                                   </TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
                           </Table>
-                          {log.notes && (
+                          {(log.notes || editingWorkoutId === log.id) && (
                             <div className="mt-4">
                               <Label>Notes</Label>
-                              <p className="text-sm text-muted-foreground mt-1">{log.notes}</p>
+                              {editingWorkoutId === log.id ? (
+                                <Textarea
+                                  value={editingWorkout?.notes || ""}
+                                  onChange={(e) => setEditingWorkout(prev => ({ ...prev!, notes: e.target.value }))}
+                                  className="mt-1"
+                                />
+                              ) : (
+                                <p className="text-sm text-muted-foreground mt-1">{log.notes}</p>
+                              )}
                             </div>
                           )}
                         </CardContent>
@@ -722,7 +924,7 @@ export default function ProgramLog() {
                           value={mealData.calories || ""}
                           onChange={(e) => setMealData(prev => ({
                             ...prev,
-                            calories: e.target.value ? parseInt(e.target.value) : 0
+                            calories: e.target.value ? parseInt(e.target.value, 10) : 0
                           }))}
                         />
                       </div>
@@ -735,7 +937,7 @@ export default function ProgramLog() {
                             value={mealData.protein || ""}
                             onChange={(e) => setMealData(prev => ({
                               ...prev,
-                              protein: e.target.value ? parseInt(e.target.value) : 0
+                              protein: e.target.value ? parseInt(e.target.value, 10) : 0
                             }))}
                           />
                         </div>
@@ -747,7 +949,7 @@ export default function ProgramLog() {
                             value={mealData.carbs || ""}
                             onChange={(e) => setMealData(prev => ({
                               ...prev,
-                              carbs: e.target.value ? parseInt(e.target.value) : 0
+                              carbs: e.target.value ? parseInt(e.target.value, 10) : 0
                             }))}
                           />
                         </div>
@@ -759,7 +961,7 @@ export default function ProgramLog() {
                             value={mealData.fats || ""}
                             onChange={(e) => setMealData(prev => ({
                               ...prev,
-                              fats: e.target.value ? parseInt(e.target.value) : 0
+                              fats: e.target.value ? parseInt(e.target.value, 10) : 0
                             }))}
                           />
                         </div>
@@ -801,14 +1003,14 @@ export default function ProgramLog() {
                     />
                   </CardContent>
                 </Card>
-
+                </div>
                 <div className="md:col-span-2 flex justify-end gap-4">
                   <Button
                     variant="outline"
                     onClick={resetMealForm}
                   >
                     Clear
-                  </Button>
+                                    </Button>
                   <Button
                     onClick={handleMealSubmit}
                     disabled={logMealMutation.isPending}
@@ -816,10 +1018,9 @@ export default function ProgramLog() {
                     {logMealMutation.isPending && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Save Meal Log
+                    Save Meal
                   </Button>
                 </div>
-              </div>
             </TabsContent>
 
             <TabsContent value="history">
@@ -846,23 +1047,101 @@ export default function ProgramLog() {
                             month: 'short',
                             day: 'numeric'
                           })}</TableCell>
-                          <TableCell>{log.calories}</TableCell>
-                          <TableCell>{log.protein}g</TableCell>
-                          <TableCell>{log.carbs}g</TableCell>
-                          <TableCell>{log.fats}g</TableCell>
-                          <TableCell>{log.notes || 'No notes'}</TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                if (confirm("Are you sure you want to delete this meal log?")) {
-                                  deleteMealMutation.mutate(log.id);
-                                }
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {editingMealId === log.id ? (
+                              <Input
+                                type="number"
+                                className="w-20"
+                                value={editingMeal?.calories || ""}
+                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, calories: parseInt(e.target.value) }))}
+                              />
+                            ) : log.calories}
+                          </TableCell>
+                          <TableCell>
+                            {editingMealId === log.id ? (
+                              <Input
+                                type="number"
+                                className="w-20"
+                                value={editingMeal?.protein || ""}
+                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, protein: parseInt(e.target.value) }))}
+                              />
+                            ) : `${log.protein}g`}
+                          </TableCell>
+                          <TableCell>
+                            {editingMealId === log.id ? (
+                              <Input
+                                type="number"
+                                className="w-20"
+                                value={editingMeal?.carbs || ""}
+                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, carbs: parseInt(e.target.value) }))}
+                              />
+                            ) : `${log.carbs}g`}
+                          </TableCell>
+                          <TableCell>
+                            {editingMealId === log.id ? (
+                              <Input
+                                type="number"
+                                className="w-20"
+                                value={editingMeal?.fats || ""}
+                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, fats: parseInt(e.target.value) }))}
+                              />
+                            ) : `${log.fats}g`}
+                          </TableCell>
+                          <TableCell>
+                            {editingMealId === log.id ? (
+                              <Input
+                                type="text"
+                                value={editingMeal?.notes || ""}
+                                onChange={(e) => setEditingMeal(prev => ({ ...prev!, notes: e.target.value }))}
+                              />
+                            ) : (log.notes || 'No notes')}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              {log.canEdit && editingMealId !== log.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditMeal(log)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {editingMealId === log.id && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setEditingMealId(null);
+                                      setEditingMeal(null);
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleSaveMeal(log.id)}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                              {log.canDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    if (confirm("Are you sure you want to delete this meal log?")) {
+                                      deleteMealMutation.mutate(log.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
