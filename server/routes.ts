@@ -594,6 +594,68 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Add meal logging endpoints after the workout logging endpoint
+  // Meal logging
+  app.post("/api/meals", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const { clientProgramId, data } = req.body;
+
+      // Verify the client has access to this program
+      const [enrollment] = await db.query.clientPrograms.findMany({
+        where: and(
+          eq(clientPrograms.id, clientProgramId),
+          eq(clientPrograms.clientId, req.user.id)
+        ),
+        limit: 1,
+      });
+
+      if (!enrollment) {
+        return res.status(404).send("Program enrollment not found");
+      }
+
+      // Create meal log
+      const [log] = await db.insert(mealLogs)
+        .values({
+          clientId: req.user.id,
+          clientProgramId,
+          calories: data.calories,
+          protein: data.protein,
+          carbs: data.carbs,
+          fat: data.fat,
+          data: data.data,
+          date: new Date(),
+        })
+        .returning();
+
+      res.json(log);
+    } catch (error: any) {
+      console.error("Error logging meal:", error);
+      res.status(500).send(error.message);
+    }
+  });
+
+  // Get meal logs
+  app.get("/api/meals", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const logs = await db.query.mealLogs.findMany({
+        where: eq(mealLogs.clientId, req.user.id),
+        orderBy: [desc(mealLogs.date)],
+      });
+
+      res.json(logs);
+    } catch (error: any) {
+      res.status(500).send(error.message);
+    }
+  });
+
   // Enhanced progress data with analytics
   app.get("/api/progress", async (req, res) => {
     if (!req.user) {
