@@ -761,51 +761,11 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log(`[Debug] Fetching workout history for program ${req.params.programId} and user ${req.user.id}`);
 
-      // First get the routine information for this program
-      const [program] = await db.query.programs.findMany({
-        where: eq(programs.id, parseInt(req.params.programId)),
-        with: {
-          routines: {
-            with: {
-              exercises: {
-                orderBy: programExercises.orderInRoutine,
-                columns: {
-                  id: true,
-                  name: true,
-                  description: true,
-                  sets: true,
-                  reps: true,
-                  restTime: true,
-                  notes: true,
-                  orderInRoutine: true,
-                }
-              },
-            },
-            columns: {
-              id: true,
-              name: true,
-              dayOfWeek: true,
-              notes: true,
-              orderInCycle: true,
-            }
-          }
-        },
-        limit: 1
-      });
-
-      console.log(`[Debug] Found program:`, program);
-      console.log(`[Debug] Routines:`, program?.routines);
-
-      // Create maps for quick lookups
-      const routineMap = program?.routines.reduce((acc, routine) => {
-        acc[routine.id] = routine;
-        return acc;
-      }, {} as Record<number, any>);
-
+      // First fetch all logs
       const logs = await db.query.workoutLogs.findMany({
         where: and(
-          eq(workoutLogs.clientProgramId, parseInt(req.params.programId)),
-          eq(workoutLogs.clientId, req.user.id)
+          eq(workoutLogs.clientId, req.user.id),
+          eq(workoutLogs.clientProgramId, parseInt(req.params.programId))
         ),
         orderBy: [desc(workoutLogs.date)],
         columns: {
@@ -817,31 +777,51 @@ export function registerRoutes(app: Express): Server {
       });
 
       console.log(`[Debug] Found ${logs.length} workout logs`);
-      console.log('[Debug] Sample log:', logs[0]);
 
+      if (logs.length === 0) {
+        return res.json([]);
+      }
+
+      // Then fetch program details only if we have logs
+      const [program] = await db.query.programs.findMany({
+        where: eq(programs.id, parseInt(req.params.programId)),
+        with: {
+          routines: {
+            with: {
+              exercises: true
+            }
+          }
+        },
+        limit: 1
+      });
+
+      // Create routine lookup map
+      const routineMap = new Map();
+      if (program?.routines) {
+        program.routines.forEach(routine => {
+          routineMap.set(routine.id, {
+            name: routine.name,
+            exercises: routine.exercises
+          });
+        });
+      }
+
+      // Format logs with routine information
       const formattedLogs = logs.map(log => {
-        const routine = routineMap[log.routineId];
-        const exerciseMap = routine?.exercises.reduce((acc: Record<number, any>, ex: any) => {
-          acc[ex.id] = ex;
-          return acc;
-        }, {});
-
+        const routine = routineMap.get(log.routineId);
         return {
           id: log.id,
           date: log.date,
           routineId: log.routineId,
           routineName: routine?.name || 'Unknown Routine',
-          exercises: log.data?.exerciseLogs?.map((ex: any) => {
-            const programExercise = exerciseMap[ex.exerciseId];
-            return {
-              name: programExercise?.name || 'Unknown Exercise',
-              sets: ex.sets.map((set: any) => ({
-                weight: parseInt(set.weight || '0'),
-                reps: parseInt(set.reps || '0')
-              }))
-            };
-          }) || [],
-          notes: log.data?.notes
+          exercises: (log.data?.exerciseLogs || []).map((ex: any) => ({
+            name: ex.exerciseName || 'Unknown Exercise',
+            sets: ex.sets.map((set: any) => ({
+              weight: parseInt(set.weight || '0'),
+              reps: parseInt(set.reps || '0')
+            }))
+          })),
+          notes: log.data?.notes || ''
         };
       });
 
