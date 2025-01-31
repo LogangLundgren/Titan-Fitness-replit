@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "./stats-card";
 import { WorkoutAnalytics } from "../analytics/workout-analytics";
 import { NutritionAnalytics } from "../analytics/nutrition-analytics";
 import { Dumbbell, Apple, Trophy } from "lucide-react";
 import type { WorkoutLog, MealLog } from "@db/schema";
+import { useUser } from "@/hooks/use-user";
+import { useEffect } from "react";
 
 interface ProgressData {
   workouts: WorkoutLog[];
@@ -17,9 +19,29 @@ interface ProgressData {
 }
 
 export function ClientDashboard() {
+  const { user } = useUser();
+  const queryClient = useQueryClient();
+
   const { data: progressData, isLoading } = useQuery<ProgressData>({
-    queryKey: ["/api/client/dashboard"],
+    queryKey: ["/api/client/dashboard", user?.id],
+    queryFn: async () => {
+      const response = await fetch("/api/client/dashboard");
+      if (!response.ok) {
+        throw new Error("Failed to fetch dashboard data");
+      }
+      return response.json();
+    },
+    enabled: !!user?.id,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    cacheTime: 60000, // Keep data in cache for 1 minute
   });
+
+  // Reset query cache when user changes or component unmounts
+  useEffect(() => {
+    return () => {
+      queryClient.removeQueries({ queryKey: ["/api/client/dashboard"] });
+    };
+  }, [queryClient, user?.id]);
 
   if (isLoading || !progressData) {
     return <div>Loading...</div>;
@@ -64,7 +86,6 @@ export function ClientDashboard() {
           <CardTitle>Coach Messages</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Messages component will be implemented in the next iteration */}
           <p className="text-muted-foreground">No messages yet</p>
         </CardContent>
       </Card>

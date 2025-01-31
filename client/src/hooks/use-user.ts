@@ -71,7 +71,9 @@ export function useUser() {
     queryKey: ['user'],
     queryFn: fetchUser,
     staleTime: Infinity,
-    retry: false
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true
   });
 
   const loginMutation = useMutation<RequestResult, Error, LoginData>({
@@ -95,7 +97,14 @@ export function useUser() {
   const logoutMutation = useMutation<RequestResult, Error>({
     mutationFn: () => handleRequest('/api/logout', 'POST'),
     onSuccess: () => {
+      // Clear all queries from the cache
+      queryClient.clear();
+      // Reset user data
       queryClient.setQueryData(['user'], null);
+      // Remove any localStorage data
+      localStorage.clear();
+      // Remove any sessionStorage data
+      sessionStorage.clear();
     },
   });
 

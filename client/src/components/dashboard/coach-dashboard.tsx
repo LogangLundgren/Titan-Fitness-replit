@@ -1,11 +1,11 @@
-
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCard } from "./stats-card";
 import { Users, Target, MessageSquare } from "lucide-react";
 import { ProgramAnalytics } from "../analytics/program-analytics";
+import { useUser } from "@/hooks/use-user";
 
 interface ClientData {
   id: number;
@@ -36,9 +36,18 @@ interface DashboardData {
 
 export function CoachDashboard() {
   const [selectedClient, setSelectedClient] = useState<number | null>(null);
+  const { user } = useUser();
+  const queryClient = useQueryClient();
+
+  // Reset state when component unmounts or user changes
+  useEffect(() => {
+    return () => {
+      setSelectedClient(null);
+    };
+  }, [user?.id]);
 
   const { data: dashboardData, isLoading } = useQuery<DashboardData>({
-    queryKey: ["coach-dashboard"],
+    queryKey: ["coach-dashboard", user?.id],
     queryFn: async () => {
       const response = await fetch("/api/coach/dashboard");
       if (!response.ok) {
@@ -46,7 +55,17 @@ export function CoachDashboard() {
       }
       return response.json();
     },
+    enabled: !!user?.id,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    cacheTime: 60000, // Keep data in cache for 1 minute
   });
+
+  // Reset query cache when user changes
+  useEffect(() => {
+    return () => {
+      queryClient.removeQueries({ queryKey: ["coach-dashboard"] });
+    };
+  }, [queryClient, user?.id]);
 
   if (isLoading || !dashboardData) {
     return <div>Loading...</div>;
