@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,11 +6,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCard } from "./stats-card";
 import { Users, Target, MessageSquare } from "lucide-react";
 import { ProgramAnalytics } from "../analytics/program-analytics";
-import type { User } from "@db/schema";
 
 interface ClientData {
   id: number;
-  username: string;
+  name: string;
+  email: string;
+  programName: string;
+  lastActive: string;
   progress: {
     totalWorkouts: number;
     lastActive: string;
@@ -17,21 +20,35 @@ interface ClientData {
   };
 }
 
+interface DashboardData {
+  clients: ClientData[];
+  stats: {
+    totalClients: number;
+    activePrograms: number;
+    totalWorkouts: number;
+  };
+  programTypes: {
+    lifting: number;
+    diet: number;
+    posing: number;
+  };
+}
+
 export function CoachDashboard() {
   const [selectedClient, setSelectedClient] = useState<number | null>(null);
 
-  const { data: clientsData, isLoading } = useQuery<{
-    clients: ClientData[];
-    stats: {
-      totalClients: number;
-      activePrograms: number;
-      messageCount: number;
-    };
-  }>({
-    queryKey: ["/api/coach/dashboard"],
+  const { data: dashboardData, isLoading } = useQuery<DashboardData>({
+    queryKey: ["coach-dashboard"],
+    queryFn: async () => {
+      const response = await fetch("/api/coach/dashboard");
+      if (!response.ok) {
+        throw new Error("Failed to fetch dashboard data");
+      }
+      return response.json();
+    },
   });
 
-  if (isLoading || !clientsData) {
+  if (isLoading || !dashboardData) {
     return <div>Loading...</div>;
   }
 
@@ -40,43 +57,47 @@ export function CoachDashboard() {
       <div className="grid gap-4 md:grid-cols-3">
         <StatsCard
           title="Total Clients"
-          value={clientsData.stats.totalClients}
+          value={dashboardData.stats.totalClients}
           icon={Users}
           description="Active client count"
         />
         <StatsCard
           title="Active Programs"
-          value={clientsData.stats.activePrograms}
+          value={dashboardData.stats.activePrograms}
           icon={Target}
           description="Programs in progress"
         />
         <StatsCard
-          title="Messages"
-          value={clientsData.stats.messageCount}
+          title="Total Workouts"
+          value={dashboardData.stats.totalWorkouts}
           icon={MessageSquare}
-          description="Unread messages"
+          description="All client workouts"
         />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {clientsData.clients.map((client) => (
+        {dashboardData.clients.map((client) => (
           <Card
             key={client.id}
             className="cursor-pointer hover:border-primary transition-colors"
             onClick={() => setSelectedClient(client.id)}
           >
             <CardHeader>
-              <CardTitle className="text-lg">{client.username}</CardTitle>
+              <CardTitle className="text-lg">{client.name}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Program: </span>
+                  {client.programName}
+                </div>
                 <div className="text-sm">
                   <span className="text-muted-foreground">Total Workouts: </span>
                   {client.progress.totalWorkouts}
                 </div>
                 <div className="text-sm">
                   <span className="text-muted-foreground">Last Active: </span>
-                  {new Date(client.progress.lastActive).toLocaleDateString()}
+                  {new Date(client.lastActive).toLocaleDateString()}
                 </div>
                 <div className="text-sm">
                   <span className="text-muted-foreground">Program Completion: </span>
@@ -94,11 +115,10 @@ export function CoachDashboard() {
             <CardTitle>Client Details</CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="progress">
+            <Tabs defaultValue="analytics">
               <TabsList>
-                <TabsTrigger value="progress">Progress</TabsTrigger>
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                <TabsTrigger value="messages">Messages</TabsTrigger>
+                <TabsTrigger value="progress">Progress</TabsTrigger>
               </TabsList>
               <TabsContent value="analytics">
                 <ProgramAnalytics clientId={selectedClient} />
@@ -106,13 +126,7 @@ export function CoachDashboard() {
               <TabsContent value="progress">
                 <div className="py-4">
                   <h3 className="text-lg font-medium">Progress Overview</h3>
-                  {/* Progress content will be implemented next */}
-                </div>
-              </TabsContent>
-              <TabsContent value="messages">
-                <div className="py-4">
-                  <h3 className="text-lg font-medium">Messages</h3>
-                  {/* Messages content will be implemented next */}
+                  {/* Progress content */}
                 </div>
               </TabsContent>
             </Tabs>
