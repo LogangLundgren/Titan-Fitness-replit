@@ -42,17 +42,19 @@ export function setupAuth(app: Express) {
     secret: process.env.REPL_ID || "fitcoach-secret",
     resave: false,
     saveUninitialized: false,
-    cookie: {},
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      secure: app.get("env") === "production",
+      httpOnly: true
+    },
     store: new MemoryStore({
-      checkPeriod: 86400000,
+      checkPeriod: 86400000, // Clear expired entries every 24h
+      stale: false // Don't serve stale data
     }),
   };
 
   if (app.get("env") === "production") {
     app.set("trust proxy", 1);
-    sessionSettings.cookie = {
-      secure: true,
-    };
   }
 
   app.use(session(sessionSettings));
@@ -62,7 +64,6 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
-        // Get user with additional profile data
         const [user] = await db
           .select()
           .from(users)
@@ -143,7 +144,6 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Auth routes
   app.post("/api/register", async (req, res, next) => {
     try {
       const result = insertUserSchema.safeParse(req.body);
@@ -197,18 +197,21 @@ export function setupAuth(app: Express) {
         profileData = clientProfile;
       }
 
-      req.login({ ...newUser, profileData }, (err) => {
-        if (err) {
-          return next(err);
-        }
-        return res.json({
-          message: "Registration successful",
-          user: {
-            id: newUser.id,
-            username: newUser.username,
-            accountType: newUser.accountType,
-            profileData
-          },
+      // Regenerate session before login
+      req.session.regenerate((err) => {
+        if (err) return next(err);
+
+        req.login({ ...newUser, profileData }, (err) => {
+          if (err) return next(err);
+          return res.json({
+            message: "Registration successful",
+            user: {
+              id: newUser.id,
+              username: newUser.username,
+              accountType: newUser.accountType,
+              profileData
+            },
+          });
         });
       });
     } catch (error) {
@@ -218,37 +221,36 @@ export function setupAuth(app: Express) {
 
   app.post("/api/login", (req, res, next) => {
     passport.authenticate("local", (err: any, user: Express.User, info: IVerifyOptions) => {
-      if (err) {
-        return next(err);
-      }
+      if (err) return next(err);
+      if (!user) return res.status(400).send(info.message ?? "Login failed");
 
-      if (!user) {
-        return res.status(400).send(info.message ?? "Login failed");
-      }
+      // Regenerate session before login
+      req.session.regenerate((err) => {
+        if (err) return next(err);
 
-      req.logIn(user, (err) => {
-        if (err) {
-          return next(err);
-        }
-
-        return res.json({
-          message: "Login successful",
-          user: {
-            id: user.id,
-            username: user.username,
-            accountType: user.accountType,
-            profileData: user.profileData
-          },
+        req.login(user, (err) => {
+          if (err) return next(err);
+          return res.json({
+            message: "Login successful",
+            user: {
+              id: user.id,
+              username: user.username,
+              accountType: user.accountType,
+              profileData: user.profileData
+            },
+          });
         });
       });
     })(req, res, next);
   });
 
   app.post("/api/logout", (req, res) => {
-    req.logout((err) => {
+    // Destroy session completely instead of just logging out
+    req.session.destroy((err) => {
       if (err) {
         return res.status(500).send("Logout failed");
       }
+      res.clearCookie('connect.sid'); // Clear session cookie
       res.json({ message: "Logout successful" });
     });
   });

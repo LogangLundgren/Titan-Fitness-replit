@@ -39,33 +39,31 @@ export function CoachDashboard() {
   const { user } = useUser();
   const queryClient = useQueryClient();
 
-  // Reset state when component unmounts or user changes
+  // Reset state and cleanup when component unmounts or user changes
   useEffect(() => {
     return () => {
       setSelectedClient(null);
+      // Clear dashboard-specific queries
+      queryClient.removeQueries({ queryKey: ['coach-dashboard'] });
     };
-  }, [user?.id]);
+  }, [user?.id, queryClient]);
 
   const { data: dashboardData, isLoading } = useQuery<DashboardData>({
-    queryKey: ["coach-dashboard", user?.id],
+    queryKey: ['coach-dashboard', user?.id],
     queryFn: async () => {
-      const response = await fetch("/api/coach/dashboard");
+      const response = await fetch('/api/coach/dashboard');
       if (!response.ok) {
-        throw new Error("Failed to fetch dashboard data");
+        throw new Error('Failed to fetch dashboard data');
       }
-      return response.json();
+      const data = await response.json();
+      return data as DashboardData;
     },
     enabled: !!user?.id,
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    cacheTime: 60000, // Keep data in cache for 1 minute
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 0, // Don't keep old data in cache
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
-
-  // Reset query cache when user changes
-  useEffect(() => {
-    return () => {
-      queryClient.removeQueries({ queryKey: ["coach-dashboard"] });
-    };
-  }, [queryClient, user?.id]);
 
   if (isLoading || !dashboardData) {
     return <div>Loading...</div>;

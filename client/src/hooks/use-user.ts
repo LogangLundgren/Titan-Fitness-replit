@@ -70,10 +70,11 @@ export function useUser() {
   const { data: user, error, isLoading } = useQuery<User | null, Error>({
     queryKey: ['user'],
     queryFn: fetchUser,
-    staleTime: Infinity,
+    staleTime: 0, // Set to 0 to always fetch fresh data
     retry: false,
     refetchOnWindowFocus: false,
-    refetchOnMount: true
+    refetchOnMount: true,
+    refetchInterval: false
   });
 
   const loginMutation = useMutation<RequestResult, Error, LoginData>({
@@ -101,10 +102,17 @@ export function useUser() {
       queryClient.clear();
       // Reset user data
       queryClient.setQueryData(['user'], null);
-      // Remove any localStorage data
+      // Clear all local storage data
       localStorage.clear();
-      // Remove any sessionStorage data
+      // Clear all session storage data
       sessionStorage.clear();
+      // Invalidate all queries
+      queryClient.invalidateQueries();
+      // Clear specific dashboard queries
+      queryClient.removeQueries({ queryKey: ['coach-dashboard'] });
+      queryClient.removeQueries({ queryKey: ['client-dashboard'] });
+      queryClient.removeQueries({ queryKey: ['/api/client/dashboard'] });
+      queryClient.removeQueries({ queryKey: ['/api/coach/dashboard'] });
     },
   });
 
