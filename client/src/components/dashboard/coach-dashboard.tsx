@@ -124,9 +124,33 @@ export function CoachDashboard() {
                 <ProgramAnalytics clientId={selectedClient} />
               </TabsContent>
               <TabsContent value="progress">
-                <div className="py-4">
-                  <h3 className="text-lg font-medium">Progress Overview</h3>
-                  {/* Progress content */}
+                <div className="space-y-6">
+                  <div className="py-4">
+                    <h3 className="text-lg font-medium">Progress Overview</h3>
+                    {dashboardData.clients.map(client => {
+                      if (client.id === selectedClient) {
+                        return (
+                          <div key={client.id} className="mt-4 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="p-4 border rounded-lg">
+                                <p className="text-sm text-muted-foreground">Program Completion</p>
+                                <p className="text-2xl font-semibold">{client.progress.programCompletion}%</p>
+                              </div>
+                              <div className="p-4 border rounded-lg">
+                                <p className="text-sm text-muted-foreground">Total Workouts</p>
+                                <p className="text-2xl font-semibold">{client.progress.totalWorkouts}</p>
+                              </div>
+                            </div>
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground">Last Active</p>
+                              <p className="text-lg">{new Date(client.progress.lastActive).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
