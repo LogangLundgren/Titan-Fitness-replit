@@ -415,7 +415,10 @@ export function registerRoutes(app: Express): Server {
   // Coach dashboard data
   app.get("/api/coach/dashboard", async (req, res) => {
     if (!req.user || req.user.accountType !== "coach") {
-      return res.status(403).send("Only coaches can access this endpoint");
+      return res.status(403).json({
+        error: "Access denied",
+        message: "Only coaches can access this endpoint"
+      });
     }
 
     try {
@@ -425,7 +428,11 @@ export function registerRoutes(app: Express): Server {
         with: {
           clientPrograms: {
             with: {
-              client: true,
+              client: {
+                with: {
+                  user: true
+                }
+              },
               workoutLogs: {
                 orderBy: [desc(workoutLogs.date)],
                 limit: 1
@@ -439,35 +446,31 @@ export function registerRoutes(app: Express): Server {
         }
       });
 
-      console.log(`[Debug] Found ${coachPrograms.length} programs for coach ${req.user.id}`);
-
       // Transform data for the dashboard
       const clients = coachPrograms.flatMap(program =>
         program.clientPrograms.map(enrollment => ({
-          id: enrollment.client.id,
-          name: enrollment.client.fullName,
-          email: enrollment.client.email,
+          id: enrollment.client?.id,
+          name: enrollment.client?.user?.fullName || 'Anonymous Client',
+          email: enrollment.client?.user?.email || 'No email provided',
           programName: program.name,
           lastActive: enrollment.workoutLogs[0]?.date || enrollment.mealLogs[0]?.date || enrollment.startDate,
           progress: {
             totalWorkouts: enrollment.workoutLogs.length,
             lastActive: enrollment.workoutLogs[0]?.date || enrollment.startDate,
-            programCompletion: Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
+            programCompletion: enrollment.completedWorkouts 
+              ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
+              : 0
           }
         }))
-      );
-
-      console.log(`[Debug] Transformed ${clients.length} client records`);
+      ).filter(client => client.id != null); // Filter out any invalid clients
 
       const stats = {
         totalClients: clients.length,
         activePrograms: coachPrograms.length,
         totalWorkouts: coachPrograms.reduce((acc, p) =>
-          acc + p.clientPrograms.reduce((sum, c) => sum + c.workoutLogs.length, 0), 0
+          acc + p.clientPrograms.reduce((sum, c) => sum + (c.workoutLogs?.length || 0), 0), 0
         )
       };
-
-      console.log('[Debug] Dashboard stats:', stats);
 
       res.json({ 
         clients, 
