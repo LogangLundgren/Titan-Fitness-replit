@@ -17,11 +17,15 @@ export function WorkoutAnalytics({ workouts, isLoading }: WorkoutAnalyticsProps)
     );
   }
 
-  // Process workout data for charts
+  // Process workout data for charts, ensuring type safety
   const processedData = workouts.map(workout => ({
-    date: new Date(workout.date).toLocaleDateString(),
-    volume: workout.data?.volume || 0,
-    intensity: workout.data?.intensity || 0,
+    date: workout.date ? new Date(workout.date).toLocaleDateString() : "Unknown",
+    volume: workout.data && typeof workout.data === "object" && "volume" in workout.data 
+      ? Number(workout.data.volume) || 0 
+      : 0,
+    intensity: workout.data && typeof workout.data === "object" && "intensity" in workout.data 
+      ? Number(workout.data.intensity) || 0 
+      : 0,
   })).reverse();
 
   return (

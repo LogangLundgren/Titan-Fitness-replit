@@ -55,28 +55,31 @@ export function CoachDashboard() {
     };
   }, [queryClient, user?.id]);
 
-  const { data: dashboardData, isLoading, error } = useQuery<DashboardData, Error>({
+  const { data: dashboardData, isLoading, error } = useQuery({
     queryKey: ['coach-dashboard', user?.id],
     queryFn: async () => {
-      const response = await fetch('/api/coach/dashboard');
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard data');
+      try {
+        const response = await fetch('/api/coach/dashboard');
+        if (!response.ok) {
+          throw new Error('Failed to fetch dashboard data');
+        }
+        const data = await response.json() as DashboardData;
+        return data;
+      } catch (error) {
+        const err = error as Error;
+        toast({
+          variant: "destructive",
+          title: "Error loading dashboard",
+          description: err.message
+        });
+        throw err;
       }
-      const data = await response.json();
-      return data as DashboardData;
     },
     enabled: !!user?.id,
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnMount: true,
     refetchOnWindowFocus: true,
-    retry: 3,
-    onError: (err: Error) => {
-      toast({
-        variant: "destructive",
-        title: "Error loading dashboard",
-        description: err.message
-      });
-    }
+    retry: 3
   });
 
   if (isLoading) {

@@ -24,27 +24,31 @@ export function ClientDashboard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: progressData, isLoading, error } = useQuery<ProgressData, Error>({
+  const { data: progressData, isLoading, error } = useQuery({
     queryKey: ['/api/client/dashboard', user?.id],
     queryFn: async () => {
-      const response = await fetch('/api/client/dashboard');
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard data');
+      try {
+        const response = await fetch('/api/client/dashboard');
+        if (!response.ok) {
+          throw new Error('Failed to fetch dashboard data');
+        }
+        const data = await response.json() as ProgressData;
+        return data;
+      } catch (error) {
+        const err = error as Error;
+        toast({
+          variant: "destructive",
+          title: "Error loading dashboard",
+          description: err.message
+        });
+        throw err;
       }
-      return response.json();
     },
     enabled: !!user?.id,
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnMount: true,
     refetchOnWindowFocus: true,
-    retry: 3,
-    onError: (err: Error) => {
-      toast({
-        variant: "destructive",
-        title: "Error loading dashboard",
-        description: err.message
-      });
-    }
+    retry: 3
   });
 
   // Reset query cache when user changes or component unmounts
