@@ -3,9 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCard } from "./stats-card";
-import { Users, Target, MessageSquare } from "lucide-react";
+import { Users, Target, MessageSquare, Loader2 } from "lucide-react";
 import { ProgramAnalytics } from "../analytics/program-analytics";
 import { useUser } from "@/hooks/use-user";
+import { useToast } from "@/hooks/use-toast";
+
+interface ClientProgress {
+  totalWorkouts: number;
+  lastActive: string;
+  programCompletion: number;
+}
 
 interface ClientData {
   id: number;
@@ -13,42 +20,42 @@ interface ClientData {
   email: string;
   programName: string;
   lastActive: string;
-  progress: {
-    totalWorkouts: number;
-    lastActive: string;
-    programCompletion: number;
-  };
+  progress: ClientProgress;
+}
+
+interface DashboardStats {
+  totalClients: number;
+  activePrograms: number;
+  totalWorkouts: number;
+}
+
+interface ProgramTypes {
+  lifting: number;
+  diet: number;
+  posing: number;
 }
 
 interface DashboardData {
   clients: ClientData[];
-  stats: {
-    totalClients: number;
-    activePrograms: number;
-    totalWorkouts: number;
-  };
-  programTypes: {
-    lifting: number;
-    diet: number;
-    posing: number;
-  };
+  stats: DashboardStats;
+  programTypes: ProgramTypes;
 }
 
 export function CoachDashboard() {
   const [selectedClient, setSelectedClient] = useState<number | null>(null);
   const { user } = useUser();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Reset state and cleanup when component unmounts or user changes
   useEffect(() => {
     return () => {
       setSelectedClient(null);
-      // Clear dashboard-specific queries
       queryClient.removeQueries({ queryKey: ['coach-dashboard'] });
     };
-  }, [user?.id, queryClient]);
+  }, [queryClient, user?.id]);
 
-  const { data: dashboardData, isLoading } = useQuery<DashboardData>({
+  const { data: dashboardData, isLoading, error } = useQuery<DashboardData, Error>({
     queryKey: ['coach-dashboard', user?.id],
     queryFn: async () => {
       const response = await fetch('/api/coach/dashboard');
@@ -59,14 +66,47 @@ export function CoachDashboard() {
       return data as DashboardData;
     },
     enabled: !!user?.id,
-    staleTime: 0, // Always fetch fresh data
-    gcTime: 0, // Don't keep old data in cache
+    staleTime: 30000, // Consider data fresh for 30 seconds
     refetchOnMount: true,
     refetchOnWindowFocus: true,
+    retry: 3,
+    onError: (err: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error loading dashboard",
+        description: err.message
+      });
+    }
   });
 
-  if (isLoading || !dashboardData) {
-    return <div>Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <p className="text-destructive">Failed to load dashboard</p>
+          <p className="text-muted-foreground">{error.message}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dashboardData) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-muted-foreground">No dashboard data available</p>
+      </div>
+    );
   }
 
   return (
@@ -93,7 +133,7 @@ export function CoachDashboard() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {dashboardData.clients.map((client) => (
+        {dashboardData.clients.map((client: ClientData) => (
           <Card
             key={client.id}
             className="cursor-pointer hover:border-primary transition-colors"
@@ -144,7 +184,7 @@ export function CoachDashboard() {
                 <div className="space-y-6">
                   <div className="py-4">
                     <h3 className="text-lg font-medium">Progress Overview</h3>
-                    {dashboardData.clients.map(client => {
+                    {dashboardData.clients.map((client: ClientData) => {
                       if (client.id === selectedClient) {
                         return (
                           <div key={client.id} className="mt-4 space-y-4">
@@ -160,7 +200,7 @@ export function CoachDashboard() {
                             </div>
                             <div className="p-4 border rounded-lg">
                               <p className="text-sm text-muted-foreground">Last Active</p>
-                              <p className="text-lg">{new Date(client.progress.lastActive).toLocaleDateString()}</p>
+                              <p className="text-lg">{new Date(client.lastActive).toLocaleDateString()}</p>
                             </div>
                           </div>
                         );

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from "@db/schema";
+import { useLocation } from 'wouter';
 
 type RequestResult = {
   ok: true;
@@ -66,6 +67,7 @@ async function fetchUser(): Promise<User | null> {
 
 export function useUser() {
   const queryClient = useQueryClient();
+  const [_, setLocation] = useLocation();
 
   const { data: user, error, isLoading } = useQuery<User | null, Error>({
     queryKey: ['user'],
@@ -113,6 +115,8 @@ export function useUser() {
       queryClient.removeQueries({ queryKey: ['client-dashboard'] });
       queryClient.removeQueries({ queryKey: ['/api/client/dashboard'] });
       queryClient.removeQueries({ queryKey: ['/api/coach/dashboard'] });
+      // Redirect to auth page
+      setLocation('/auth');
     },
   });
 
