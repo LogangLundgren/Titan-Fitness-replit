@@ -3,6 +3,27 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
 
+// Refined schema for program exercise data
+const exerciseSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().optional(),
+  sets: z.number(),
+  reps: z.string(),
+  restTime: z.string().optional(),
+  notes: z.string().optional(),
+  orderInRoutine: z.number(),
+});
+
+const routineSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  dayOfWeek: z.number().optional(),
+  orderInCycle: z.number(),
+  notes: z.string().optional(),
+  exercises: z.array(exerciseSchema),
+});
+
 // Base users table
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -54,24 +75,24 @@ export const clients = pgTable("clients", {
   socialLinks: jsonb("social_links").default('{}'),
 });
 
-// Programs table
+// Programs table with improved data structure
 export const programs = pgTable("programs", {
   id: serial("id").primaryKey(),
   uuid: uuid("uuid").defaultRandom().notNull().unique(),
   name: text("name").notNull(),
   description: text("description"),
-  type: text("type").notNull(),
+  type: text("type", { enum: ['lifting', 'diet', 'posing'] }).notNull(),
   price: real("price").default(0),
   coachId: integer("coach_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   isPublic: boolean("is_public").default(false),
   programData: jsonb("program_data").default('{}'),
-  status: text("status"),
+  status: text("status", { enum: ['draft', 'active', 'archived'] }).default('draft'),
   cycleLength: integer("cycle_length"),
 });
 
-// Rest of the schema remains unchanged, adding UUID to remaining tables
+// Routines table
 export const routines = pgTable("routines", {
   id: serial("id").primaryKey(),
   uuid: uuid("uuid").defaultRandom().notNull().unique(),
@@ -82,6 +103,7 @@ export const routines = pgTable("routines", {
   notes: text("notes"),
 });
 
+// Program Exercises table
 export const programExercises = pgTable("program_exercises", {
   id: serial("id").primaryKey(),
   uuid: uuid("uuid").defaultRandom().notNull().unique(),
@@ -95,6 +117,7 @@ export const programExercises = pgTable("program_exercises", {
   orderInRoutine: integer("order_in_routine").notNull(),
 });
 
+// Client Programs table
 export const clientPrograms = pgTable("client_programs", {
   id: serial("id").primaryKey(),
   uuid: uuid("uuid").defaultRandom().notNull().unique(),
@@ -108,6 +131,7 @@ export const clientPrograms = pgTable("client_programs", {
   version: integer("version").default(1),
 });
 
+// Workout Logs table
 export const workoutLogs = pgTable("workout_logs", {
   id: serial("id").primaryKey(),
   uuid: uuid("uuid").defaultRandom().notNull().unique(),
@@ -118,6 +142,7 @@ export const workoutLogs = pgTable("workout_logs", {
   date: timestamp("date").defaultNow(),
 });
 
+// Meal Logs table
 export const mealLogs = pgTable("meal_logs", {
   id: serial("id").primaryKey(),
   uuid: uuid("uuid").defaultRandom().notNull().unique(),
@@ -131,6 +156,7 @@ export const mealLogs = pgTable("meal_logs", {
   date: timestamp("date").defaultNow(),
 });
 
+// Beta Signups table
 export const betaSignups = pgTable("beta_signups", {
   id: serial("id").primaryKey(),
   uuid: uuid("uuid").defaultRandom().notNull().unique(),
@@ -160,37 +186,48 @@ export const posingDetailsSchema = z.object({
 export const programDataSchema = z.object({
   mealPlans: z.array(mealPlanSchema).optional(),
   posingDetails: posingDetailsSchema.optional(),
+  routines: z.array(routineSchema).optional(),
 });
 
 export const clientProgramDataSchema = z.object({
   customizations: z.object({
     name: z.string().optional(),
     notes: z.string().optional(),
-    routines: z.array(z.any()).optional(),
+    routines: z.array(routineSchema).optional(),
     mealPlans: z.array(mealPlanSchema).optional(),
     posingDetails: posingDetailsSchema.optional(),
   }).optional(),
   progress: z.object({
-    completed: z.array(z.string()).optional(),
+    completed: z.array(z.string()),
     notes: z.array(z.object({
       date: z.string(),
       routineId: z.number(),
       note: z.string(),
-    })).optional(),
-  }).optional(),
+    })),
+    lastWorkout: z.string().optional(),
+    streak: z.number().default(0),
+  }).default({
+    completed: [],
+    notes: [],
+    streak: 0
+  }),
 });
 
-// Export types
+// Export types with improved type safety
 export type User = typeof users.$inferSelect;
 export type Coach = typeof coaches.$inferSelect;
 export type Client = typeof clients.$inferSelect;
-export type Program = typeof programs.$inferSelect;
+export type Program = typeof programs.$inferSelect & {
+  programData: z.infer<typeof programDataSchema>;
+};
 export type Routine = typeof routines.$inferSelect;
 export type ProgramExercise = typeof programExercises.$inferSelect;
 export type ClientProgram = typeof clientPrograms.$inferSelect;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type MealLog = typeof mealLogs.$inferSelect;
 export type BetaSignup = typeof betaSignups.$inferSelect;
+export type ClientProgramData = z.infer<typeof clientProgramDataSchema>;
+
 
 // Relations
 export const userRelations = relations(users, ({ many }) => ({
@@ -265,5 +302,3 @@ export const selectProgramSchema = createSelectSchema(programs);
 
 export const insertBetaSignupSchema = createInsertSchema(betaSignups);
 export const selectBetaSignupSchema = createSelectSchema(betaSignups);
-
-export type ClientProgramData = z.infer<typeof clientProgramDataSchema>;
