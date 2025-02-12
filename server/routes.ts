@@ -4,13 +4,19 @@ import { setupAuth } from "./auth";
 import { db } from "@db";
 import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups, users, routines, programExercises } from "@db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import { 
+  clientProgramDataSchema, 
+  type ClientProgramData,
+  programDataSchema,
+  type Program
+} from "@db/schema";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
   // Get client's enrolled programs
   app.get("/api/client/programs/:id?", async (req, res) => {
-    if (!req.user) {
+    if (!req.user?.id) {
       return res.status(401).send("Not authenticated");
     }
 
@@ -59,30 +65,31 @@ export function registerRoutes(app: Express): Server {
           limit: 1,
         });
 
-        console.log(`[Debug] Found enrollment:`, enrollment);
-        console.log(`[Debug] Program:`, enrollment?.program);
-        console.log(`[Debug] Routines:`, enrollment?.program?.routines);
-
-        if (!enrollment) {
+        if (!enrollment?.program) {
           return res.status(404).json({
             error: "Program not found",
             message: "The requested program does not exist or you don't have access to it"
           });
         }
 
+        // Parse and validate client program data
+        const programData = enrollment.clientProgramData ? 
+          clientProgramDataSchema.parse(enrollment.clientProgramData) : 
+          { progress: { completed: [], notes: [] }, customizations: {} };
+
         // Transform the response to include client-specific data
         const program = enrollment.program;
         const transformedProgram = {
           enrollmentId: enrollment.id,
           programId: program.id,
-          name: program.name,
+          name: programData.customizations?.name || program.name,
           description: program.description,
           type: program.type,
           startDate: enrollment.startDate,
           active: enrollment.active,
           version: enrollment.version,
-          routines: program.routines,
-          progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
+          routines: programData.customizations?.routines || program.routines,
+          progress: programData.progress || { completed: [], notes: [] },
         };
 
         return res.json(transformedProgram);
@@ -109,19 +116,25 @@ export function registerRoutes(app: Express): Server {
 
       const transformedPrograms = enrolledPrograms.map(enrollment => {
         const program = enrollment.program;
+        if (!program) return null;
+
+        const programData = enrollment.clientProgramData ? 
+          clientProgramDataSchema.parse(enrollment.clientProgramData) : 
+          { progress: { completed: [], notes: [] }, customizations: {} };
+
         return {
           enrollmentId: enrollment.id,
           programId: program.id,
-          name: enrollment.clientProgramData?.customizations?.name || program.name,
+          name: programData.customizations?.name || program.name,
           description: program.description,
           type: program.type,
           startDate: enrollment.startDate,
           active: enrollment.active,
           version: enrollment.version,
-          routines: enrollment.clientProgramData?.customizations?.routines || program.routines,
-          progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
+          routines: programData.customizations?.routines || program.routines,
+          progress: programData.progress || { completed: [], notes: [] },
         };
-      });
+      }).filter(Boolean);
 
       res.json(transformedPrograms);
     } catch (error: any) {
@@ -992,7 +1005,7 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log(`[Debug] Fetching workout history for program ${req.params.programId} and user ${req.user.id}`);
 
-      // First verify the program enrollment exists and belongs to this user
+      // Firstverify the program enrollment exists and belongs to this user
       const [enrollment] = await db.query.clientPrograms.findMany({
         where: and(
           eq(clientPrograms.id, parseInt(req.params.programId)),
