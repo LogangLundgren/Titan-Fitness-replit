@@ -590,8 +590,18 @@ export function registerRoutes(app: Express): Server {
           clientPrograms: {
             with: {
               client: {
+                columns: {
+                  id: true,
+                  userId: true,
+                  bio: true,
+                },
                 with: {
-                  user: true
+                  user: {
+                    columns: {
+                      fullName: true,
+                      email: true
+                    }
+                  }
                 }
               }
             }
@@ -638,18 +648,13 @@ export function registerRoutes(app: Express): Server {
         program.clientPrograms.map(enrollment => {
           const programWorkouts = workoutLogsByProgram.get(enrollment.id) || [];
           const programMeals = mealLogsByProgram.get(enrollment.id) || [];
-          const lastActivity = new Date(Math.max(
-            enrollment.lastModified?.getTime() || 0,
-            programWorkouts[0]?.date?.getTime() || 0,
-            programMeals[0]?.date?.getTime() || 0
-          ));
 
           return {
             id: enrollment.client?.id,
             name: enrollment.client?.user?.fullName || 'Anonymous Client',
             email: enrollment.client?.user?.email || 'No email provided',
             programName: program.name,
-            lastActive: lastActivity,
+            lastActive: enrollment.lastModified || new Date(),
             progress: {
               totalWorkouts: programWorkouts.length,
               lastWorkout: programWorkouts[0]?.date,
