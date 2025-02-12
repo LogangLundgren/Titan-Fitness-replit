@@ -583,7 +583,7 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      // Get all programs created by this coach
+      // Get all programs created by this coach with their enrollments
       const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
         with: {
@@ -593,55 +593,87 @@ export function registerRoutes(app: Express): Server {
                 with: {
                   user: true
                 }
-              },
-              workoutLogs: {
-                orderBy: [desc(workoutLogs.date)],
-                limit: 1
-              },
-              mealLogs: {
-                orderBy: [desc(mealLogs.date)],
-                limit: 1
               }
             }
           }
         }
       });
 
+      // Get workout logs separately to avoid relation inference issues
+      const clientProgramIds = coachPrograms.flatMap(program => 
+        program.clientPrograms.map(cp => cp.id)
+      );
+
+      const [workoutLogs, mealLogs] = await Promise.all([
+        clientProgramIds.length > 0 ? db.query.workoutLogs.findMany({
+          where: inArray(workoutLogs.clientProgramId, clientProgramIds),
+          orderBy: [desc(workoutLogs.date)]
+        }) : Promise.resolve([]),
+        clientProgramIds.length > 0 ? db.query.mealLogs.findMany({
+          where: inArray(mealLogs.clientProgramId, clientProgramIds),
+          orderBy: [desc(mealLogs.date)]
+        }) : Promise.resolve([])
+      ]);
+
+      // Create a map for quick lookup
+      const workoutLogsByProgram = new Map();
+      const mealLogsByProgram = new Map();
+
+      workoutLogs.forEach(log => {
+        if (!workoutLogsByProgram.has(log.clientProgramId)) {
+          workoutLogsByProgram.set(log.clientProgramId, []);
+        }
+        workoutLogsByProgram.get(log.clientProgramId).push(log);
+      });
+
+      mealLogs.forEach(log => {
+        if (!mealLogsByProgram.has(log.clientProgramId)) {
+          mealLogsByProgram.set(log.clientProgramId, []);
+        }
+        mealLogsByProgram.get(log.clientProgramId).push(log);
+      });
+
       // Transform data for the dashboard
       const clients = coachPrograms.flatMap(program =>
-        program.clientPrograms.map(enrollment => ({
-          id: enrollment.client?.id,
-          name: enrollment.client?.user?.fullName || 'Anonymous Client',
-          email: enrollment.client?.user?.email || 'No email provided',
-          programName: program.name,
-          lastActive: enrollment.workoutLogs[0]?.date || enrollment.mealLogs[0]?.date || enrollment.startDate,
-          progress: {
-            totalWorkouts: enrollment.workoutLogs.length,
-            lastActive: enrollment.workoutLogs[0]?.date || enrollment.startDate,
-            programCompletion: enrollment.completedWorkouts 
-              ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
-              : 0
-          }
-        }))
-      ).filter(client => client.id != null); // Filter out any invalid clients
+        program.clientPrograms.map(enrollment => {
+          const programWorkouts = workoutLogsByProgram.get(enrollment.id) || [];
+          const programMeals = mealLogsByProgram.get(enrollment.id) || [];
+          const lastActivity = new Date(Math.max(
+            enrollment.lastModified?.getTime() || 0,
+            programWorkouts[0]?.date?.getTime() || 0,
+            programMeals[0]?.date?.getTime() || 0
+          ));
+
+          return {
+            id: enrollment.client?.id,
+            name: enrollment.client?.user?.fullName || 'Anonymous Client',
+            email: enrollment.client?.user?.email || 'No email provided',
+            programName: program.name,
+            lastActive: lastActivity,
+            progress: {
+              totalWorkouts: programWorkouts.length,
+              lastWorkout: programWorkouts[0]?.date,
+              programCompletion: enrollment.completedWorkouts 
+                ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
+                : 0
+            }
+          };
+        })
+      ).filter(client => client.id != null);
 
       const stats = {
         totalClients: clients.length,
         activePrograms: coachPrograms.length,
-        totalWorkouts: coachPrograms.reduce((acc, p) =>
-          acc + p.clientPrograms.reduce((sum, c) => sum + (c.workoutLogs?.length || 0), 0), 0
-        )
+        totalWorkouts: workoutLogs.length
       };
 
-      res.json({ 
-        clients, 
-        stats,
-        programTypes: {
-          lifting: coachPrograms.filter(p => p.type === 'lifting').length,
-          diet: coachPrograms.filter(p => p.type === 'diet').length,
-          posing: coachPrograms.filter(p => p.type === 'posing').length
-        }
-      });
+      const programTypes = {
+        lifting: coachPrograms.filter(p => p.type === 'lifting').length,
+        diet: coachPrograms.filter(p => p.type === 'diet').length,
+        posing: coachPrograms.filter(p => p.type === 'posing').length
+      };
+
+      res.json({ clients, stats, programTypes });
     } catch (error: any) {
       console.error("Error fetching coach dashboard:", error);
       res.status(500).json({
@@ -869,7 +901,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-
   // Get meal logs for a specific program
   app.get("/api/meals/:programId", async (req, res) => {
     if (!req.user) {
@@ -978,10 +1009,10 @@ export function registerRoutes(app: Express): Server {
       }),
       // Recent meals
       db.query.mealLogs.findMany({
-        where: eq(mealLogs.clientId, req.user.id),
-        orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
-        limit: 10
-      }),
+          where: eq(mealLogs.clientId, req.user.id),
+          orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
+          limit: 10
+        }),
       // Workout statistics
       db.query.workoutLogs.findMany({
         where: eq(workoutLogs.clientId, req.user.id),

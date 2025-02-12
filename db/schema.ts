@@ -283,8 +283,36 @@ export const clientProgramRelations = relations(clientPrograms, ({ one, many }) 
     fields: [clientPrograms.programId],
     references: [programs.id],
   }),
-  workoutLogs: many(workoutLogs),
-  mealLogs: many(mealLogs),
+  workoutLogs: many(workoutLogs, {
+    fields: [clientPrograms.id],
+    references: [workoutLogs.clientProgramId],
+  }),
+  mealLogs: many(mealLogs, {
+    fields: [clientPrograms.id],
+    references: [mealLogs.clientProgramId],
+  }),
+}));
+
+export const workoutLogRelations = relations(workoutLogs, ({ one }) => ({
+  clientProgram: one(clientPrograms, {
+    fields: [workoutLogs.clientProgramId],
+    references: [clientPrograms.id],
+  }),
+  client: one(clients, {
+    fields: [workoutLogs.clientId],
+    references: [clients.id],
+  }),
+}));
+
+export const mealLogRelations = relations(mealLogs, ({ one }) => ({
+  clientProgram: one(clientPrograms, {
+    fields: [mealLogs.clientProgramId],
+    references: [clientPrograms.id],
+  }),
+  client: one(clients, {
+    fields: [mealLogs.clientId],
+    references: [clients.id],
+  }),
 }));
 
 // Create Zod schemas for insertion and selection
