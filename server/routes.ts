@@ -412,7 +412,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Fixed coach dashboard route
+  // Fixed coach dashboard route with better client name handling
   app.get("/api/coach/dashboard", async (req, res) => {
     if (!req.user || req.user.accountType !== "coach") {
       return res.status(403).json({
@@ -436,6 +436,7 @@ export function registerRoutes(app: Express): Server {
                       id: true,
                       fullName: true,
                       email: true,
+                      username: true, // Added username as fallback
                     },
                   },
                 },
@@ -500,9 +501,14 @@ export function registerRoutes(app: Express): Server {
           const meals = mealLogsMap.get(enrollment.id) || [];
           const clientUser = enrollment.client.user;
 
+          // Better client name handling
+          const clientName = clientUser.fullName || 
+            clientUser.username?.split('@')[0] || 
+            'Unnamed Client';
+
           return {
             id: enrollment.client.id,
-            name: clientUser.fullName || 'Unnamed Client',
+            name: clientName,
             email: clientUser.email,
             programName: program.name,
             programType: program.type,
