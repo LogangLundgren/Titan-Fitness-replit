@@ -12,6 +12,7 @@ import Profile from "@/pages/profile";
 import { useUser } from "@/hooks/use-user";
 import { Loader2 } from "lucide-react";
 import { Navbar } from "@/components/navigation/navbar";
+import CreateProgram from "@/pages/program-create";
 import CreateLiftingProgram from "@/pages/program-create/lifting";
 import CreateDietProgram from "@/pages/program-create/diet";
 import CreatePosingProgram from "@/pages/program-create/posing";
@@ -46,6 +47,7 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/marketplace" component={Marketplace} />
           <Route path="/programs" component={Programs} />
+          <Route path="/programs/create" component={CreateProgram} />
           <Route path="/programs/create/lifting" component={CreateLiftingProgram} />
           <Route path="/programs/create/diet" component={CreateDietProgram} />
           <Route path="/programs/create/posing" component={CreatePosingProgram} />
