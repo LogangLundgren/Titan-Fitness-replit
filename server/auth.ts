@@ -5,7 +5,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { users, coaches, clients } from "@db/schema";
+import { users, coaches, clients, insertUserSchema, type User } from "@db/schema";
 import { db } from "@db";
 import { eq } from "drizzle-orm";
 
@@ -30,38 +30,8 @@ const crypto = {
 
 declare global {
   namespace Express {
-    interface User {
-      id: number;
-      uuid: string;
-      username: string;
-      email: string;
-      accountType: 'client' | 'coach';
-      fullName: string | null;
-      phoneNumber: string | null;
-      bio: string | null;
-      experience: string | null;
-      certifications: string | null;
-      specialties: string | null;
-      socialLinks: Record<string, string> | null;
-      isPublicProfile: boolean;
-      profilePictureUrl: string | null;
-      profileData?: {
-        id: number;
-        uuid: string;
-        userId: number;
-        bio: string | null;
-        height?: string | null;
-        weight?: string | null;
-        fitnessGoals?: string | null;
-        medicalConditions?: string | null;
-        dietaryRestrictions?: string | null;
-        experience?: string | null;
-        certifications?: string | null;
-        specialties?: string | null;
-        socialLinks: Record<string, string> | null;
-        isPublicProfile: boolean;
-        profilePictureUrl: string | null;
-      } | null;
+    interface User extends User {
+      profileData?: any;
     }
   }
 }
@@ -70,23 +40,21 @@ export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
   const sessionSettings: session.SessionOptions = {
     secret: process.env.REPL_ID || "fitcoach-secret",
-    resave: true,
-    saveUninitialized: true,
+    resave: false,
+    saveUninitialized: false,
     cookie: {
-      maxAge: 24 * 60 * 60 * 1000,
-      secure: false,
-      httpOnly: true,
-      sameSite: 'lax'
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      secure: app.get("env") === "production",
+      httpOnly: true
     },
     store: new MemoryStore({
-      checkPeriod: 86400000
+      checkPeriod: 86400000, // Clear expired entries every 24h
+      stale: false // Don't serve stale data
     }),
-    name: 'titan.sid'
   };
 
   if (app.get("env") === "production") {
     app.set("trust proxy", 1);
-    sessionSettings.cookie!.secure = true;
   }
 
   app.use(session(sessionSettings));
@@ -111,6 +79,7 @@ export function setupAuth(app: Express) {
           return done(null, false, { message: "Incorrect password." });
         }
 
+        // Fetch additional profile data based on account type
         let profileData = null;
         if (user.accountType === 'coach') {
           const [coachData] = await db
@@ -128,18 +97,7 @@ export function setupAuth(app: Express) {
           profileData = clientData;
         }
 
-        const authenticatedUser: Express.User = {
-          ...user,
-          socialLinks: user.socialLinks as Record<string, string> | null,
-          isPublicProfile: user.isPublicProfile ?? true,
-          profileData: profileData ? {
-            ...profileData,
-            socialLinks: profileData.socialLinks as Record<string, string> | null,
-            isPublicProfile: profileData.isPublicProfile ?? true
-          } : null
-        };
-
-        return done(null, authenticatedUser);
+        return done(null, { ...user, profileData });
       } catch (err) {
         return done(err);
       }
@@ -147,21 +105,22 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => {
-    done(null, { id: user.id, uuid: user.uuid });
+    done(null, user.id);
   });
 
-  passport.deserializeUser(async (serialized: { id: number; uuid: string }, done) => {
+  passport.deserializeUser(async (id: number, done) => {
     try {
       const [user] = await db
         .select()
         .from(users)
-        .where(eq(users.id, serialized.id))
+        .where(eq(users.id, id))
         .limit(1);
 
       if (!user) {
         return done(null, false);
       }
 
+      // Fetch additional profile data
       let profileData = null;
       if (user.accountType === 'coach') {
         const [coachData] = await db
@@ -179,57 +138,119 @@ export function setupAuth(app: Express) {
         profileData = clientData;
       }
 
-      const deserializedUser: Express.User = {
-        ...user,
-        socialLinks: user.socialLinks as Record<string, string> | null,
-        isPublicProfile: user.isPublicProfile ?? true,
-        profileData: profileData ? {
-          ...profileData,
-          socialLinks: profileData.socialLinks as Record<string, string> | null,
-          isPublicProfile: profileData.isPublicProfile ?? true
-        } : null
-      };
-
-      done(null, deserializedUser);
+      done(null, { ...user, profileData });
     } catch (err) {
       done(err);
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: any, user: Express.User | false, info: IVerifyOptions) => {
-      if (err) {
-        return next(err);
+  app.post("/api/register", async (req, res, next) => {
+    try {
+      const result = insertUserSchema.safeParse(req.body);
+      if (!result.success) {
+        return res
+          .status(400)
+          .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
       }
-      if (!user) {
-        return res.status(400).json({
-          error: "Authentication failed",
-          message: info.message ?? "Login failed"
+
+      const { username, email, password, accountType } = result.data;
+
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, username))
+        .limit(1);
+
+      if (existingUser) {
+        return res.status(400).send("Username already exists");
+      }
+
+      const hashedPassword = await crypto.hash(password);
+
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          username,
+          email,
+          password: hashedPassword,
+          accountType: accountType || "client",
+        })
+        .returning();
+
+      // Create corresponding profile based on account type
+      let profileData = null;
+      if (accountType === 'coach') {
+        const [coachProfile] = await db
+          .insert(coaches)
+          .values({
+            userId: newUser.id,
+          })
+          .returning();
+        profileData = coachProfile;
+      } else {
+        const [clientProfile] = await db
+          .insert(clients)
+          .values({
+            userId: newUser.id,
+          })
+          .returning();
+        profileData = clientProfile;
+      }
+
+      // Regenerate session before login
+      req.session.regenerate((err) => {
+        if (err) return next(err);
+
+        req.login({ ...newUser, profileData }, (err) => {
+          if (err) return next(err);
+          return res.json({
+            message: "Registration successful",
+            user: {
+              id: newUser.id,
+              username: newUser.username,
+              accountType: newUser.accountType,
+              profileData
+            },
+          });
         });
-      }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
-      req.logIn(user, (err) => {
-        if (err) {
-          return next(err);
-        }
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: Express.User, info: IVerifyOptions) => {
+      if (err) return next(err);
+      if (!user) return res.status(400).send(info.message ?? "Login failed");
 
-        return res.json({
-          message: "Login successful",
-          user: {
-            id: user.id,
-            uuid: user.uuid,
-            username: user.username,
-            accountType: user.accountType,
-            profileData: user.profileData
-          }
+      // Regenerate session before login
+      req.session.regenerate((err) => {
+        if (err) return next(err);
+
+        req.login(user, (err) => {
+          if (err) return next(err);
+          return res.json({
+            message: "Login successful",
+            user: {
+              id: user.id,
+              username: user.username,
+              accountType: user.accountType,
+              profileData: user.profileData
+            },
+          });
         });
       });
     })(req, res, next);
   });
 
   app.post("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.clearCookie('titan.sid');
+    // Destroy session completely instead of just logging out
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).send("Logout failed");
+      }
+      res.clearCookie('connect.sid'); // Clear session cookie
       res.json({ message: "Logout successful" });
     });
   });
@@ -238,9 +259,6 @@ export function setupAuth(app: Express) {
     if (req.isAuthenticated()) {
       return res.json(req.user);
     }
-    res.status(401).json({
-      error: "Not authenticated",
-      message: "Please log in to access this resource"
-    });
+    res.status(401).send("Not logged in");
   });
 }

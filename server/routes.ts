@@ -2,169 +2,15 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { db } from "@db";
-import { z } from "zod";
 import { programs, clientPrograms, workoutLogs, mealLogs, betaSignups, users, routines, programExercises } from "@db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { 
-  clientProgramDataSchema, 
-  type ClientProgramData,
-  programDataSchema,
-  type Program
-} from "@db/schema";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
 
-  // Improved workout logging endpoint
-  app.post("/api/workouts", async (req, res) => {
-    if (!req.user?.id) {
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "You must be logged in to log workouts"
-      });
-    }
-
-    try {
-      const { clientProgramId, routineId, data } = req.body;
-
-      // Verify the client has access to this program
-      const [enrollment] = await db.query.clientPrograms.findMany({
-        where: and(
-          eq(clientPrograms.id, clientProgramId),
-          eq(clientPrograms.clientId, req.user.id)
-        ),
-        with: {
-          program: {
-            with: {
-              routines: {
-                where: eq(routines.id, routineId),
-                with: {
-                  exercises: {
-                    orderBy: programExercises.orderInRoutine,
-                  }
-                }
-              }
-            }
-          }
-        },
-        limit: 1,
-      });
-
-      if (!enrollment?.program) {
-        return res.status(404).json({
-          error: "Program not found",
-          message: "The requested program does not exist or you don't have access to it"
-        });
-      }
-
-      const routine = enrollment.program.routines[0];
-      if (!routine) {
-        return res.status(404).json({
-          error: "Routine not found",
-          message: "The specified routine does not exist in this program"
-        });
-      }
-
-      // Create exercise map for validation
-      const exerciseMap = new Map(
-        routine.exercises.map(ex => [ex.id, ex])
-      );
-
-      // Validate and transform exercise logs
-      const exerciseLogs = data.exerciseLogs.map((log: any) => {
-        const exercise = exerciseMap.get(log.exerciseId);
-        if (!exercise) {
-          throw new Error(`Invalid exercise ID: ${log.exerciseId}`);
-        }
-
-        return {
-          exerciseId: log.exerciseId,
-          exerciseName: exercise.name,
-          sets: log.sets.map((set: any) => ({
-            weight: set.weight,
-            reps: set.reps,
-            completed: true,
-          }))
-        };
-      });
-
-      // Create workout log
-      const [log] = await db.insert(workoutLogs)
-        .values({
-          clientId: req.user.id,
-          clientProgramId,
-          routineId,
-          data: {
-            exerciseLogs,
-            routineName: routine.name,
-            notes: data.notes,
-            completedAt: new Date().toISOString(),
-          },
-          date: new Date(),
-        })
-        .returning();
-
-      // Update client program progress
-      const programData = enrollment.clientProgramData ? 
-        clientProgramDataSchema.parse(enrollment.clientProgramData) : 
-        { progress: { completed: [], notes: [], streak: 0 }, customizations: {} };
-
-      const progress = programData.progress;
-      progress.completed = [...new Set([...progress.completed, routineId.toString()])];
-      progress.lastWorkout = new Date().toISOString();
-
-      // Update streak
-      const lastWorkoutDate = progress.lastWorkout ? new Date(progress.lastWorkout) : null;
-      const today = new Date();
-      if (lastWorkoutDate) {
-        const dayDiff = Math.floor((today.getTime() - lastWorkoutDate.getTime()) / (1000 * 60 * 60 * 24));
-        if (dayDiff <= 1) {
-          progress.streak = (progress.streak || 0) + 1;
-        } else {
-          progress.streak = 1;
-        }
-      } else {
-        progress.streak = 1;
-      }
-
-      if (data.notes) {
-        progress.notes = [...(progress.notes || []), {
-          date: new Date().toISOString(),
-          routineId,
-          note: data.notes,
-        }];
-      }
-
-      await db.update(clientPrograms)
-        .set({
-          clientProgramData: {
-            ...programData,
-            progress,
-          },
-          lastModified: new Date(),
-        })
-        .where(eq(clientPrograms.id, enrollment.id));
-
-      res.json({
-        log,
-        progress: {
-          completed: progress.completed.length,
-          streak: progress.streak,
-          lastWorkout: progress.lastWorkout,
-        }
-      });
-    } catch (error: any) {
-      console.error("Error logging workout:", error);
-      res.status(500).json({
-        error: "Failed to log workout",
-        message: error.message
-      });
-    }
-  });
-
   // Get client's enrolled programs
   app.get("/api/client/programs/:id?", async (req, res) => {
-    if (!req.user?.id) {
+    if (!req.user) {
       return res.status(401).send("Not authenticated");
     }
 
@@ -213,31 +59,30 @@ export function registerRoutes(app: Express): Server {
           limit: 1,
         });
 
-        if (!enrollment?.program) {
+        console.log(`[Debug] Found enrollment:`, enrollment);
+        console.log(`[Debug] Program:`, enrollment?.program);
+        console.log(`[Debug] Routines:`, enrollment?.program?.routines);
+
+        if (!enrollment) {
           return res.status(404).json({
             error: "Program not found",
             message: "The requested program does not exist or you don't have access to it"
           });
         }
 
-        // Parse and validate client program data
-        const programData = enrollment.clientProgramData ? 
-          clientProgramDataSchema.parse(enrollment.clientProgramData) : 
-          { progress: { completed: [], notes: [], streak: 0 }, customizations: {} };
-
         // Transform the response to include client-specific data
         const program = enrollment.program;
         const transformedProgram = {
           enrollmentId: enrollment.id,
           programId: program.id,
-          name: programData.customizations?.name || program.name,
+          name: program.name,
           description: program.description,
           type: program.type,
           startDate: enrollment.startDate,
           active: enrollment.active,
           version: enrollment.version,
-          routines: programData.customizations?.routines || program.routines,
-          progress: programData.progress || { completed: [], notes: [], streak: 0 },
+          routines: program.routines,
+          progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
         };
 
         return res.json(transformedProgram);
@@ -264,25 +109,19 @@ export function registerRoutes(app: Express): Server {
 
       const transformedPrograms = enrolledPrograms.map(enrollment => {
         const program = enrollment.program;
-        if (!program) return null;
-
-        const programData = enrollment.clientProgramData ? 
-          clientProgramDataSchema.parse(enrollment.clientProgramData) : 
-          { progress: { completed: [], notes: [], streak: 0 }, customizations: {} };
-
         return {
           enrollmentId: enrollment.id,
           programId: program.id,
-          name: programData.customizations?.name || program.name,
+          name: enrollment.clientProgramData?.customizations?.name || program.name,
           description: program.description,
           type: program.type,
           startDate: enrollment.startDate,
           active: enrollment.active,
           version: enrollment.version,
-          routines: programData.customizations?.routines || program.routines,
-          progress: programData.progress || { completed: [], notes: [], streak: 0 },
+          routines: enrollment.clientProgramData?.customizations?.routines || program.routines,
+          progress: enrollment.clientProgramData?.progress || { completed: [], notes: [] },
         };
-      }).filter(Boolean);
+      });
 
       res.json(transformedPrograms);
     } catch (error: any) {
@@ -583,102 +422,65 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      // Get all programs created by this coach with their enrollments
+      // Get all programs created by this coach
       const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
         with: {
           clientPrograms: {
             with: {
               client: {
-                columns: {
-                  id: true,
-                  userId: true,
-                  bio: true,
-                },
                 with: {
-                  user: {
-                    columns: {
-                      fullName: true,
-                      email: true
-                    }
-                  }
+                  user: true
                 }
+              },
+              workoutLogs: {
+                orderBy: [desc(workoutLogs.date)],
+                limit: 1
+              },
+              mealLogs: {
+                orderBy: [desc(mealLogs.date)],
+                limit: 1
               }
             }
           }
         }
       });
 
-      // Get workout logs separately to avoid relation inference issues
-      const clientProgramIds = coachPrograms.flatMap(program => 
-        program.clientPrograms.map(cp => cp.id)
-      );
-
-      const [workoutLogs, mealLogs] = await Promise.all([
-        clientProgramIds.length > 0 ? db.query.workoutLogs.findMany({
-          where: inArray(workoutLogs.clientProgramId, clientProgramIds),
-          orderBy: [desc(workoutLogs.date)]
-        }) : Promise.resolve([]),
-        clientProgramIds.length > 0 ? db.query.mealLogs.findMany({
-          where: inArray(mealLogs.clientProgramId, clientProgramIds),
-          orderBy: [desc(mealLogs.date)]
-        }) : Promise.resolve([])
-      ]);
-
-      // Create a map for quick lookup
-      const workoutLogsByProgram = new Map();
-      const mealLogsByProgram = new Map();
-
-      workoutLogs.forEach(log => {
-        if (!workoutLogsByProgram.has(log.clientProgramId)) {
-          workoutLogsByProgram.set(log.clientProgramId, []);
-        }
-        workoutLogsByProgram.get(log.clientProgramId).push(log);
-      });
-
-      mealLogs.forEach(log => {
-        if (!mealLogsByProgram.has(log.clientProgramId)) {
-          mealLogsByProgram.set(log.clientProgramId, []);
-        }
-        mealLogsByProgram.get(log.clientProgramId).push(log);
-      });
-
       // Transform data for the dashboard
       const clients = coachPrograms.flatMap(program =>
-        program.clientPrograms.map(enrollment => {
-          const programWorkouts = workoutLogsByProgram.get(enrollment.id) || [];
-          const programMeals = mealLogsByProgram.get(enrollment.id) || [];
-
-          return {
-            id: enrollment.client?.id,
-            name: enrollment.client?.user?.fullName || 'Anonymous Client',
-            email: enrollment.client?.user?.email || 'No email provided',
-            programName: program.name,
-            lastActive: enrollment.lastModified || new Date(),
-            progress: {
-              totalWorkouts: programWorkouts.length,
-              lastWorkout: programWorkouts[0]?.date,
-              programCompletion: enrollment.completedWorkouts 
-                ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
-                : 0
-            }
-          };
-        })
-      ).filter(client => client.id != null);
+        program.clientPrograms.map(enrollment => ({
+          id: enrollment.client?.id,
+          name: enrollment.client?.user?.fullName || 'Anonymous Client',
+          email: enrollment.client?.user?.email || 'No email provided',
+          programName: program.name,
+          lastActive: enrollment.workoutLogs[0]?.date || enrollment.mealLogs[0]?.date || enrollment.startDate,
+          progress: {
+            totalWorkouts: enrollment.workoutLogs.length,
+            lastActive: enrollment.workoutLogs[0]?.date || enrollment.startDate,
+            programCompletion: enrollment.completedWorkouts 
+              ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
+              : 0
+          }
+        }))
+      ).filter(client => client.id != null); // Filter out any invalid clients
 
       const stats = {
         totalClients: clients.length,
         activePrograms: coachPrograms.length,
-        totalWorkouts: workoutLogs.length
+        totalWorkouts: coachPrograms.reduce((acc, p) =>
+          acc + p.clientPrograms.reduce((sum, c) => sum + (c.workoutLogs?.length || 0), 0), 0
+        )
       };
 
-      const programTypes = {
-        lifting: coachPrograms.filter(p => p.type === 'lifting').length,
-        diet: coachPrograms.filter(p => p.type === 'diet').length,
-        posing: coachPrograms.filter(p => p.type === 'posing').length
-      };
-
-      res.json({ clients, stats, programTypes });
+      res.json({ 
+        clients, 
+        stats,
+        programTypes: {
+          lifting: coachPrograms.filter(p => p.type === 'lifting').length,
+          diet: coachPrograms.filter(p => p.type === 'diet').length,
+          posing: coachPrograms.filter(p => p.type === 'posing').length
+        }
+      });
     } catch (error: any) {
       console.error("Error fetching coach dashboard:", error);
       res.status(500).json({
@@ -750,6 +552,128 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+
+  // Workout logging
+  app.post("/api/workouts", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    try {
+      const { clientProgramId, routineId, data } = req.body;
+
+      // Verify the client has access to this program and get program details
+      const [enrollment] = await db.query.clientPrograms.findMany({
+        where: and(
+          eq(clientPrograms.id, clientProgramId),
+          eq(clientPrograms.clientId, req.user.id)
+        ),
+        with: {
+          program: {
+            with: {
+              routines: {
+                where: eq(routines.id, routineId),
+                with: {
+                  exercises: {
+                    orderBy: programExercises.orderInRoutine,
+                  }
+                }
+              }
+            }
+          }
+        },
+        limit: 1,
+      });
+
+      if (!enrollment) {
+        return res.status(404).send("Program enrollment not found");
+      }
+
+      console.log('[Debug] Found enrollment:', {
+        id: enrollment.id,
+        programId: enrollment.program?.id,
+        routineCount: enrollment.program?.routines.length
+      });
+
+      const routine = enrollment.program?.routines[0];
+      if (!routine) {
+        return res.status(404).send("Routine not found");
+      }
+
+      console.log('[Debug] Found routine:', {
+        id: routine.id,
+        name: routine.name,
+        exerciseCount: routine.exercises.length
+      });
+
+      // Create exercise map for validation and name lookup
+      const exerciseMap = new Map(
+        routine.exercises.map(ex => [ex.id, ex])
+      );
+
+      // Validate and transform exercise logs
+      const exerciseLogs = data.exerciseLogs.map((log: any) => {
+        const exercise = exerciseMap.get(log.exerciseId);
+
+        console.log('[Debug] Mapping exercise:', {
+          logExerciseId: log.exerciseId,
+          foundExercise: exercise?.name,
+          logSets: log.sets
+        });
+
+        return {
+          exerciseId: log.exerciseId,
+          exerciseName: exercise?.name || 'Unknown Exercise', // Use program exercise name
+          sets: log.sets.map((set: any) => ({
+            weight: set.weight,
+            reps: set.reps
+          }))
+        };
+      });
+
+      // Create workout log with proper names
+      const [log] = await db.insert(workoutLogs)
+        .values({
+          clientId: req.user.id,
+          clientProgramId,
+          routineId,
+          data: {
+            exerciseLogs,
+            routineName: routine.name, // Store actual routine name
+            notes: data.notes
+          },
+          date: new Date(),
+        })
+        .returning();
+
+      // Update client program progress
+      const progress = enrollment.clientProgramData?.progress || { completed: [], notes: [] };
+      progress.completed = [...new Set([...progress.completed, routineId.toString()])];
+
+      if (data.notes) {
+        progress.notes = [...(progress.notes || []), {
+          date: new Date().toISOString(),
+          routineId,
+          note: data.notes,
+        }];
+      }
+
+      await db.update(clientPrograms)
+        .set({
+          clientProgramData: {
+            ...enrollment.clientProgramData,
+            progress,
+          },
+          lastModified: new Date(),
+        })
+        .where(eq(clientPrograms.id, enrollment.id));
+
+      res.json(log);
+    } catch (error: any) {
+      console.error("Error logging workout:", error);
+      res.status(500).send(error.message);
+    }
+  });
 
   // Update workout log endpoint
   app.put("/api/workouts/:id", async (req, res) => {
@@ -906,6 +830,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+
   // Get meal logs for a specific program
   app.get("/api/meals/:programId", async (req, res) => {
     if (!req.user) {
@@ -1014,10 +939,10 @@ export function registerRoutes(app: Express): Server {
       }),
       // Recent meals
       db.query.mealLogs.findMany({
-          where: eq(mealLogs.clientId, req.user.id),
-          orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
-          limit: 10
-        }),
+        where: eq(mealLogs.clientId, req.user.id),
+        orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
+        limit: 10
+      }),
       // Workout statistics
       db.query.workoutLogs.findMany({
         where: eq(workoutLogs.clientId, req.user.id),
@@ -1067,7 +992,7 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log(`[Debug] Fetching workout history for program ${req.params.programId} and user ${req.user.id}`);
 
-      // Firstverify the program enrollment exists and belongs to this user
+      // First verify the program enrollment exists and belongs to this user
       const [enrollment] = await db.query.clientPrograms.findMany({
         where: and(
           eq(clientPrograms.id, parseInt(req.params.programId)),
@@ -1348,7 +1273,7 @@ export function registerRoutes(app: Express): Server {
           active: true,
           version: 1,
           clientProgramData: {
-            progress: { completed: [], notes: [], streak: 0 }
+            progress: { completed: [], notes: [] }
           }
         })
         .returning();
@@ -1364,7 +1289,7 @@ export function registerRoutes(app: Express): Server {
         active: enrollment.active,
         version: enrollment.version,
         routines: program.routines || [],
-        progress: { completed: [], notes: [], streak: 0 },
+        progress: { completed: [], notes: [] },
       };
 
       res.json(transformedEnrollment);
