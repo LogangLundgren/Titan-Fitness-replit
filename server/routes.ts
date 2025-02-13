@@ -424,39 +424,23 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('[Debug] Fetching coach dashboard for user:', req.user.id);
 
-      // Get all programs created by this coach with detailed client information
-      const coachPrograms = await db.select({
-        id: programs.id,
-        name: programs.name,
-        type: programs.type,
-        status: programs.status,
-        cycleLength: programs.cycleLength,
-        clientPrograms: db.select({
-          id: clientPrograms.id,
-          startDate: clientPrograms.startDate,
-          active: clientPrograms.active,
-          client: db.select({
-            id: users.id,
-            fullName: users.fullName,
-            email: users.email
-          }).from(users)
-            .where(eq(users.id, clientPrograms.clientId)),
-          workoutLogs: db.select()
-            .from(workoutLogs)
-            .where(eq(workoutLogs.clientProgramId, clientPrograms.id))
-            .orderBy(desc(workoutLogs.date))
-            .limit(10),
-          mealLogs: db.select()
-            .from(mealLogs)
-            .where(eq(mealLogs.clientProgramId, clientPrograms.id))
-            .orderBy(desc(mealLogs.date))
-            .limit(10)
-        })
-        .from(clientPrograms)
-        .where(eq(clientPrograms.programId, programs.id))
-      })
-      .from(programs)
-      .where(eq(programs.coachId, req.user.id));
+      // Get all programs created by this coach with client information
+      const coachPrograms = await db.query.programs.findMany({
+        where: eq(programs.coachId, req.user.id),
+        with: {
+          clientPrograms: {
+            with: {
+              workoutLogs: true,
+              mealLogs: true,
+              client: {
+                with: {
+                  user: true
+                }
+              }
+            }
+          }
+        }
+      });
 
       console.log('[Debug] Found programs:', coachPrograms.length);
 
@@ -465,14 +449,14 @@ export function registerRoutes(app: Express): Server {
         program.clientPrograms
           .filter(enrollment => enrollment.active)
           .map(enrollment => {
-            const client = enrollment.client[0]; // Get the first (and should be only) client
-            const workouts = enrollment.workoutLogs;
-            const meals = enrollment.mealLogs;
+            const workouts = enrollment.workoutLogs || [];
+            const meals = enrollment.mealLogs || [];
+            const clientUser = enrollment.client?.user;
 
             return {
-              id: client?.id,
-              name: client?.fullName || 'Unnamed Client',
-              email: client?.email || 'No email provided',
+              id: enrollment.client?.id,
+              name: clientUser?.fullName || 'Unnamed Client',
+              email: clientUser?.email || 'No email provided',
               programName: program.name,
               programType: program.type,
               lastActive: enrollment.startDate,
@@ -495,7 +479,7 @@ export function registerRoutes(app: Express): Server {
         totalClients: clients.length,
         activePrograms: coachPrograms.filter(p => p.status === 'active').length,
         totalWorkouts: coachPrograms.reduce((acc, p) =>
-          acc + p.clientPrograms.reduce((sum, c) => sum + c.workoutLogs.length, 0), 0
+          acc + p.clientPrograms.reduce((sum, c) => sum + (c.workoutLogs?.length || 0), 0), 0
         )
       };
 
