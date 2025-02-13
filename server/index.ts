@@ -53,18 +53,18 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // Try different ports if 5000 is in use
+  // Try port 5001 first, then increment if needed
   const tryPort = async (port: number): Promise<void> => {
     try {
       server.listen(port, "0.0.0.0", () => {
         log(`serving on port ${port}`);
       });
-    } catch (err) {
-      if (err.code === 'EADDRINUSE') {
+    } catch (err: any) {
+      if (err?.code === 'EADDRINUSE') {
         if (port < 5010) { // Try up to port 5010
           await tryPort(port + 1);
         } else {
-          throw new Error('No available ports found between 5000 and 5010');
+          throw new Error('No available ports found between 5001 and 5010');
         }
       } else {
         throw err;
@@ -72,5 +72,5 @@ app.use((req, res, next) => {
     }
   };
 
-  await tryPort(5000);
+  await tryPort(5001);
 })();
