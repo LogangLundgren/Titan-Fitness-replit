@@ -247,95 +247,100 @@ export function registerRoutes(app: Express): Server {
       const programId = parseInt(req.params.id);
       const { routines: workoutDays, mealPlans, posingDetails, createdAt, updatedAt, ...programData } = req.body;
 
-      // Prepare the program data based on type
-      let typeSpecificData = {};
-      if (programData.type === "diet" && mealPlans) {
-        typeSpecificData = { mealPlans };
-      } else if (programData.type === "posing" && posingDetails) {
-        typeSpecificData = { posingDetails };
-      }
+      // Start a transaction
+      const result = await db.transaction(async (tx) => {
+        // Prepare the program data based on type
+        let typeSpecificData = {};
+        if (programData.type === "diet" && mealPlans) {
+          typeSpecificData = { mealPlans };
+        } else if (programData.type === "posing" && posingDetails) {
+          typeSpecificData = { posingDetails };
+        }
 
-      // Update program details
-      const [updatedProgram] = await db
-        .update(programs)
-        .set({
-          ...programData,
-          updatedAt: new Date(),
-          programData: typeSpecificData,
-        })
-        .where(eq(programs.id, programId))
-        .returning();
+        // Update program details
+        const [updatedProgram] = await tx
+          .update(programs)
+          .set({
+            ...programData,
+            updatedAt: new Date(),
+            programData: typeSpecificData,
+          })
+          .where(eq(programs.id, programId))
+          .returning();
 
-      // Handle lifting program specific updates
-      if (updatedProgram.type === "lifting" && workoutDays) {
-        // Delete existing routines and exercises
-        await db.delete(routines).where(eq(routines.programId, programId));
+        // Handle lifting program specific updates
+        if (updatedProgram.type === "lifting" && workoutDays) {
+          // Delete existing routines (cascades to exercises due to foreign key)
+          await tx.delete(routines).where(eq(routines.programId, programId));
 
-        // Create new routines and exercises
-        for (const [dayIndex, day] of workoutDays.entries()) {
-          const [routine] = await db.insert(routines)
-            .values({
-              programId,
-              name: day.name,
-              dayOfWeek: day.dayOfWeek,
-              orderInCycle: dayIndex + 1,
-              notes: day.notes,
-            })
-            .returning();
+          // Create new routines and exercises
+          for (const [dayIndex, day] of workoutDays.entries()) {
+            const [routine] = await tx.insert(routines)
+              .values({
+                programId,
+                name: day.name,
+                dayOfWeek: day.dayOfWeek,
+                orderInCycle: dayIndex + 1,
+                notes: day.notes,
+              })
+              .returning();
 
-          if (day.exercises?.length > 0) {
-            await db.insert(programExercises)
-              .values(
-                day.exercises.map((exercise: any, exerciseIndex: number) => ({
-                  routineId: routine.id,
-                  name: exercise.name,
-                  description: exercise.description,
-                  sets: exercise.sets,
-                  reps: exercise.reps,
-                  restTime: exercise.restTime,
-                  notes: exercise.notes,
-                  orderInRoutine: exerciseIndex + 1,
-                }))
-              );
+            if (day.exercises?.length > 0) {
+              await tx.insert(programExercises)
+                .values(
+                  day.exercises.map((exercise: any, exerciseIndex: number) => ({
+                    routineId: routine.id,
+                    name: exercise.name,
+                    description: exercise.description,
+                    sets: exercise.sets,
+                    reps: exercise.reps,
+                    restTime: exercise.restTime,
+                    notes: exercise.notes,
+                    orderInRoutine: exerciseIndex + 1,
+                  }))
+                );
+            }
           }
         }
-      }
 
-      // Fetch the updated program with all related data
-      const [completeProgram] = await db.query.programs.findMany({
-        where: eq(programs.id, programId),
-        with: {
-          routines: {
-            with: {
-              exercises: {
-                orderBy: programExercises.orderInRoutine,
+        // Fetch the updated program with all related data
+        const [completeProgram] = await tx.query.programs.findMany({
+          where: eq(programs.id, programId),
+          with: {
+            routines: {
+              with: {
+                exercises: {
+                  orderBy: programExercises.orderInRoutine,
+                },
               },
-            },
-            orderBy: routines.orderInCycle,
-          }
-        },
-        columns: {
-          id: true,
-          name: true,
-          description: true,
-          type: true,
-          price: true,
-          coachId: true,
-          createdAt: true,
-          updatedAt: true,
-          isPublic: true,
-          cycleLength: true,
-          status: true,
-          programData: true,
-        },
-        limit: 1,
+              orderBy: routines.orderInCycle,
+            }
+          },
+          columns: {
+            id: true,
+            name: true,
+            description: true,
+            type: true,
+            price: true,
+            coachId: true,
+            createdAt: true,
+            updatedAt: true,
+            isPublic: true,
+            cycleLength: true,
+            status: true,
+            programData: true,
+          },
+          limit: 1,
+        });
+
+        return completeProgram;
       });
 
       // Transform response
       const transformedProgram = {
-        ...completeProgram,
-        mealPlans: completeProgram.type === 'diet' ? completeProgram.programData?.mealPlans : undefined,
-        posingDetails: completeProgram.type === 'posing' ? completeProgram.programData?.posingDetails : undefined,
+        ...result,
+        mealPlans: result.type === 'diet' ? result.programData?.mealPlans : undefined,
+        posingDetails: result.type === 'posing' ? result.programData?.posingDetails : undefined,
       };
 
       res.json(transformedProgram);
@@ -1006,7 +1011,7 @@ export function registerRoutes(app: Express): Server {
           orderBy: [desc(mealLogs.date)],
           limit: 10
         }),
-        // Workout statistics
+                // Workout statistics
         db.query.workoutLogs.findMany({
           where: eq(workoutLogs.clientId, req.user.id),
           orderBy: [desc(workoutLogs.date)],
