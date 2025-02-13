@@ -452,8 +452,8 @@ export function registerRoutes(app: Express): Server {
         .map(cp => cp.id);
 
       if (clientProgramIds.length === 0) {
-        return res.json({ 
-          clients: [], 
+        return res.json({
+          clients: [],
           stats: { totalClients: 0, activePrograms: 0, totalWorkouts: 0 },
           programTypes: { lifting: 0, diet: 0, posing: 0, 'all-inclusive': 0 }
         });
@@ -493,7 +493,7 @@ export function registerRoutes(app: Express): Server {
       });
 
       // Transform data for dashboard
-      const clients = coachPrograms.flatMap(program => 
+      const clients = coachPrograms.flatMap(program =>
         program.clientPrograms.map(enrollment => {
           if (!enrollment.client?.user) return null;
 
@@ -502,8 +502,8 @@ export function registerRoutes(app: Express): Server {
           const clientUser = enrollment.client.user;
 
           // Better client name handling
-          const clientName = clientUser.fullName || 
-            clientUser.username?.split('@')[0] || 
+          const clientName = clientUser.fullName ||
+            clientUser.username?.split('@')[0] ||
             'Unnamed Client';
 
           return {
@@ -520,7 +520,7 @@ export function registerRoutes(app: Express): Server {
               programCompletion: Math.round((workouts.length / (program.cycleLength || 1)) * 100),
             },
             stats: {
-              averageCalories: meals.length > 0 
+              averageCalories: meals.length > 0
                 ? Math.round(meals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / meals.length)
                 : 0,
               totalWorkouts: workouts.length,
@@ -992,57 +992,140 @@ export function registerRoutes(app: Express): Server {
       return res.status(401).send("Not authenticated");
     }
 
-    const [workouts, meals, workoutStats, nutritionStats] = await Promise.all([
-      // Recent workouts
-      db.query.workoutLogs.findMany({
-        where: eq(workoutLogs.clientId, req.user.id),
-        orderBy: (workoutLogs, { desc }) => [desc(workoutLogs.date)],
-        limit: 10
-      }),
-      // Recent meals
-      db.query.mealLogs.findMany({
-        where: eq(mealLogs.clientId,req.user.id),
-        orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
-        limit: 10
-      }),
-      // Workout statistics
-      db.query.workoutLogs.findMany({
-        where: eq(workoutLogs.clientId, req.user.id),
-        orderBy: (workoutLogs, { desc }) => [desc(workoutLogs.date)],
-        limit: 30 // Last 30 workouts for trends
-      }),
-      // Nutrition statistics
-      db.query.mealLogs.findMany({
-        where: eq(mealLogs.clientId, req.user.id),
-        orderBy: (mealLogs, { desc }) =>[desc(mealLogs.date)],
-        limit: 30 // Last 30 days of nutrition data
-      })
-    ]);
+    try {
+      const [workouts, meals, workoutStats, nutritionStats] = await Promise.all([
+        // Recent workouts
+        db.query.workoutLogs.findMany({
+          where: eq(workoutLogs.clientId, req.user.id),
+          orderBy: [desc(workoutLogs.date)],
+          limit: 10
+        }),
+        // Recent meals
+        db.query.mealLogs.findMany({
+          where: eq(mealLogs.clientId, req.user.id),
+          orderBy: [desc(mealLogs.date)],
+          limit: 10
+        }),
+        // Workout statistics
+        db.query.workoutLogs.findMany({
+          where: eq(workoutLogs.clientId, req.user.id),
+          orderBy: [desc(workoutLogs.date)],
+          limit: 30 // Last 30 days of workout data
+        }),
+        // Nutrition statistics
+        db.query.mealLogs.findMany({
+          where: eq(mealLogs.clientId, req.user.id),
+          orderBy: [desc(mealLogs.date)],
+          limit: 30 // Last 30 days of nutrition data
+        })
+      ]);
 
-    // Calculate averages and trends
-    const workoutTrends = {
-      totalWorkouts: workoutStats.length,
-      averageVolume: workoutStats.reduce((acc, w) => acc + (w.data?.volume || 0), 0) / workoutStats.length || 0,
-      lastWeekVolume: workoutStats.slice(0, 7).reduce((acc, w) => acc + (w.data?.volume || 0), 0),
-    };
+      // Calculate statistics
+      const stats = {
+        workouts: {
+          total: workoutStats.length,
+          frequency: workoutStats.length / 4, // Per week over last 30 days
+          lastWorkout: workoutStats[0]?.date || null,
+        },
+        nutrition: {
+          averageCalories: nutritionStats.length > 0
+            ? Math.round(nutritionStats.reduce((acc, meal) => acc + (meal.calories || 0), 0) / nutritionStats.length)
+            : 0,
+          averageProtein: nutritionStats.length > 0
+            ? Math.round(nutritionStats.reduce((acc, meal) => acc + (meal.protein || 0), 0) / nutritionStats.length)
+            : 0,
+          lastMeal: nutritionStats[0]?.date || null,
+        }
+      };
 
-    const nutritionTrends = {
-      averageCalories: meals.reduce((acc, m) => acc + (m.calories || 0), 0) / meals.length || 0,
-      averageProtein: meals.reduce((acc, m) => acc + (m.protein || 0), 0) / meals.length || 0,
-      caloriesTrend: nutritionStats.map(m => ({
-        date: m.date,
-        calories: m.calories,
-      })),
-    };
+      res.json({
+        recentWorkouts: workouts,
+        recentMeals: meals,
+        stats
+      });
+    } catch (error: any) {
+      console.error("Error fetching progress data:", error);
+      res.status(500).json({
+        error: "Failed to fetch progress data",
+        details: error.message
+      });
+    }
+  });
 
-    res.json({
-      workouts,
-      meals,
-      analytics: {
-        workout: workoutTrends,
-        nutrition: nutritionTrends,
+  // Add new endpoint for coach to view client history
+  app.get("/api/coach/client/:clientId/history", async (req, res) => {
+    if (!req.user || req.user.accountType !== "coach") {
+      return res.status(403).json({
+        error: "Access denied",
+        message: "Only coaches can access this endpoint"
+      });
+    }
+
+    try {
+      const clientId = parseInt(req.params.clientId);
+
+      // Verify this client is assigned to the coach
+      const [clientProgram] = await db.query.clientPrograms.findMany({
+        where: and(
+          eq(clientPrograms.clientId, clientId),
+          eq(programs.coachId, req.user.id)
+        ),
+        with: {
+          program: true,
+          client: {
+            with: {
+              user: {
+                columns: {
+                  fullName: true,
+                  email: true,
+                  username: true,
+                }
+              }
+            }
+          }
+        },
+        limit: 1
+      });
+
+      if (!clientProgram) {
+        return res.status(404).json({
+          error: "Client not found",
+          message: "The requested client was not found or is not assigned to you"
+        });
       }
-    });
+
+      const [workouts, meals] = await Promise.all([
+        db.query.workoutLogs.findMany({
+          where: eq(workoutLogs.clientId, clientId),
+          orderBy: [desc(workoutLogs.date)],
+          limit: 30
+        }),
+        db.query.mealLogs.findMany({
+          where: eq(mealLogs.clientId, clientId),
+          orderBy: [desc(mealLogs.date)],
+          limit: 30
+        })
+      ]);
+
+      res.json({
+        client: {
+          id: clientId,
+          name: clientProgram.client.user.fullName ||
+                clientProgram.client.user.username?.split('@')[0] ||
+                'Unnamed Client',
+          email: clientProgram.client.user.email
+        },
+        workouts,
+        meals,
+        programDetails: clientProgram.program
+      });
+    } catch (error: any) {
+      console.error("Error fetching client history:", error);
+      res.status(500).json({
+        error: "Failed to fetch client history",
+        details: error.message
+      });
+    }
   });
 
   //Updated workout history
