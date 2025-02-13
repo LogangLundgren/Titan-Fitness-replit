@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ export default function CreateLiftingProgram() {
     description: "",
     type: "lifting",
     price: 0,
+    isPublic: false,
     workoutDays: [] as WorkoutDay[],
   });
 
@@ -84,14 +86,14 @@ export default function CreateLiftingProgram() {
     }));
   };
 
-  const handleSubmit = async () => {
-    if (!program.name) {
+  const validateProgram = () => {
+    if (!program.name.trim()) {
       toast({
         variant: "destructive",
         title: "Error",
         description: "Program name is required",
       });
-      return;
+      return false;
     }
 
     if (program.workoutDays.length === 0) {
@@ -100,6 +102,45 @@ export default function CreateLiftingProgram() {
         title: "Error",
         description: "Add at least one workout day",
       });
+      return false;
+    }
+
+    for (const day of program.workoutDays) {
+      if (!day.name.trim()) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "All workout days must have a name",
+        });
+        return false;
+      }
+
+      if (day.exercises.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: `Workout day "${day.name}" must have at least one exercise`,
+        });
+        return false;
+      }
+
+      for (const exercise of day.exercises) {
+        if (!exercise.name.trim()) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "All exercises must have a name",
+          });
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateProgram()) {
       return;
     }
 
@@ -178,6 +219,14 @@ export default function CreateLiftingProgram() {
                 value={program.price}
                 onChange={(e) => setProgram({ ...program, price: parseFloat(e.target.value) })}
               />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="isPublic"
+                checked={program.isPublic}
+                onCheckedChange={(checked) => setProgram({ ...program, isPublic: checked })}
+              />
+              <Label htmlFor="isPublic">List in Marketplace</Label>
             </div>
           </CardContent>
         </Card>
