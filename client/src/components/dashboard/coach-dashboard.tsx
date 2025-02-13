@@ -3,10 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCard } from "./stats-card";
-import { Users, Target, MessageSquare, Loader2 } from "lucide-react";
+import { Users, Target, MessageSquare, Loader2, CalendarIcon } from "lucide-react";
 import { ProgramAnalytics } from "../analytics/program-analytics";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from 'date-fns';
 
 interface ClientProgress {
   totalWorkouts: number;
@@ -19,6 +20,7 @@ interface ClientData {
   name: string;
   email: string;
   programName: string;
+  programType: string;
   lastActive: string;
   progress: ClientProgress;
 }
@@ -33,6 +35,7 @@ interface ProgramTypes {
   lifting: number;
   diet: number;
   posing: number;
+  'all-inclusive': number;
 }
 
 interface DashboardData {
@@ -139,30 +142,39 @@ export function CoachDashboard() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {dashboardData.clients.map((client: ClientData) => (
           <Card
-            key={client.id}
+            key={`${client.id}-${client.programName}`}
             className="cursor-pointer hover:border-primary transition-colors"
             onClick={() => setSelectedClient(client.id)}
           >
             <CardHeader>
-              <CardTitle className="text-lg">{client.name}</CardTitle>
+              <CardTitle className="text-lg flex justify-between items-center">
+                <span>{client.name}</span>
+                <span className="text-sm text-muted-foreground">
+                  {formatDistanceToNow(new Date(client.lastActive), { addSuffix: true })}
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="text-sm">
                   <span className="text-muted-foreground">Program: </span>
-                  {client.programName}
+                  <span className="font-medium">{client.programName}</span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Type: </span>
+                  <span className="font-medium capitalize">{client.programType}</span>
                 </div>
                 <div className="text-sm">
                   <span className="text-muted-foreground">Total Workouts: </span>
-                  {client.progress.totalWorkouts}
-                </div>
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Last Active: </span>
-                  {new Date(client.lastActive).toLocaleDateString()}
+                  <span className="font-medium">{client.progress.totalWorkouts}</span>
                 </div>
                 <div className="text-sm">
                   <span className="text-muted-foreground">Program Completion: </span>
-                  {client.progress.programCompletion}%
+                  <span className="font-medium">{client.progress.programCompletion}%</span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Contact: </span>
+                  <span className="font-medium">{client.email}</span>
                 </div>
               </div>
             </CardContent>
@@ -204,7 +216,9 @@ export function CoachDashboard() {
                             </div>
                             <div className="p-4 border rounded-lg">
                               <p className="text-sm text-muted-foreground">Last Active</p>
-                              <p className="text-lg">{new Date(client.lastActive).toLocaleDateString()}</p>
+                              <p className="text-lg">
+                                {formatDistanceToNow(new Date(client.lastActive), { addSuffix: true })}
+                              </p>
                             </div>
                           </div>
                         );

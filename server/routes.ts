@@ -424,7 +424,7 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('[Debug] Fetching coach dashboard for user:', req.user.id);
 
-      // Get all programs created by this coach with simplified relations
+      // Get all programs created by this coach with client details
       const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
         columns: {
@@ -442,6 +442,7 @@ export function registerRoutes(app: Express): Server {
               clientId: true,
               startDate: true,
               completedWorkouts: true,
+              active: true,
             },
             with: {
               client: {
@@ -452,8 +453,10 @@ export function registerRoutes(app: Express): Server {
                 with: {
                   user: {
                     columns: {
+                      id: true,
                       fullName: true,
                       email: true,
+                      profileData: true,
                     }
                   }
                 }
@@ -467,25 +470,28 @@ export function registerRoutes(app: Express): Server {
 
       // Transform data for the dashboard
       const clients = coachPrograms.flatMap(program =>
-        program.clientPrograms.map(enrollment => ({
-          id: enrollment.client?.id,
-          name: enrollment.client?.user?.fullName || 'Anonymous Client',
-          email: enrollment.client?.user?.email || 'No email provided',
-          programName: program.name,
-          lastActive: enrollment.startDate,
-          progress: {
-            totalWorkouts: enrollment.completedWorkouts || 0,
+        program.clientPrograms
+          .filter(enrollment => enrollment.active) // Only show active enrollments
+          .map(enrollment => ({
+            id: enrollment.client?.id,
+            name: enrollment.client?.user?.fullName || 'Unnamed Client',
+            email: enrollment.client?.user?.email || 'No email provided',
+            programName: program.name,
+            programType: program.type,
             lastActive: enrollment.startDate,
-            programCompletion: enrollment.completedWorkouts
-              ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
-              : 0
-          }
-        }))
+            progress: {
+              totalWorkouts: enrollment.completedWorkouts || 0,
+              lastActive: enrollment.startDate,
+              programCompletion: enrollment.completedWorkouts
+                ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
+                : 0
+            }
+          }))
       ).filter(client => client.id != null);
 
       const stats = {
         totalClients: clients.length,
-        activePrograms: coachPrograms.length,
+        activePrograms: coachPrograms.filter(p => p.status === 'active').length,
         totalWorkouts: coachPrograms.reduce((acc, p) =>
           acc + p.clientPrograms.reduce((sum, c) => sum + (c.completedWorkouts || 0), 0), 0
         )
@@ -494,7 +500,8 @@ export function registerRoutes(app: Express): Server {
       const programTypes = {
         lifting: coachPrograms.filter(p => p.type === 'lifting').length,
         diet: coachPrograms.filter(p => p.type === 'diet').length,
-        posing: coachPrograms.filter(p => p.type === 'posing').length
+        posing: coachPrograms.filter(p => p.type === 'posing').length,
+        'all-inclusive': coachPrograms.filter(p => p.type === 'all-inclusive').length
       };
 
       console.log('[Debug] Sending response:', {
@@ -1013,12 +1020,12 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      console.log(`[Debug] Fetching workout history for program ${req.params.programId} and user ${req.user.id}`);
+      console.log(`[Debug] Fetching workout historyfor program ${req.params.programId} and user ${req.user.id}`);
 
       // First verify the program enrollment exists and belongs to this user
       const [enrollment] = await db.query.clientPrograms.findMany({
         where: and(
-          eq(clientPrograms.id, parseInt(req.paramsprogramId)),
+          eq(clientPrograms.id, parseInt(req.params.programId)),
           eq(clientPrograms.clientId, req.user.id)
         ),
         with: {
