@@ -11,8 +11,15 @@ import { formatDistanceToNow } from 'date-fns';
 
 interface ClientProgress {
   totalWorkouts: number;
-  lastActive: string;
+  lastWorkout: string;
+  lastMeal: string;
   programCompletion: number;
+}
+
+interface ClientStats {
+  averageCalories: number;
+  totalWorkouts: number;
+  workoutFrequency: number;
 }
 
 interface ClientData {
@@ -23,6 +30,7 @@ interface ClientData {
   programType: string;
   lastActive: string;
   progress: ClientProgress;
+  stats: ClientStats;
 }
 
 interface DashboardStats {
@@ -65,8 +73,7 @@ export function CoachDashboard() {
         if (!response.ok) {
           throw new Error('Failed to fetch dashboard data');
         }
-        const data = await response.json();
-        return data;
+        return await response.json();
       } catch (error) {
         const err = error as Error;
         toast({
@@ -173,6 +180,10 @@ export function CoachDashboard() {
                   <span className="font-medium">{client.progress.programCompletion}%</span>
                 </div>
                 <div className="text-sm">
+                  <span className="text-muted-foreground">Average Calories: </span>
+                  <span className="font-medium">{Math.round(client.stats.averageCalories)} kcal</span>
+                </div>
+                <div className="text-sm">
                   <span className="text-muted-foreground">Contact: </span>
                   <span className="font-medium">{client.email}</span>
                 </div>
@@ -198,34 +209,45 @@ export function CoachDashboard() {
               </TabsContent>
               <TabsContent value="progress">
                 <div className="space-y-6">
-                  <div className="py-4">
-                    <h3 className="text-lg font-medium">Progress Overview</h3>
-                    {dashboardData.clients.map((client: ClientData) => {
-                      if (client.id === selectedClient) {
-                        return (
-                          <div key={client.id} className="mt-4 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-muted-foreground">Program Completion</p>
-                                <p className="text-2xl font-semibold">{client.progress.programCompletion}%</p>
-                              </div>
-                              <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-muted-foreground">Total Workouts</p>
-                                <p className="text-2xl font-semibold">{client.progress.totalWorkouts}</p>
-                              </div>
+                  {dashboardData.clients.map((client: ClientData) => {
+                    if (client.id === selectedClient) {
+                      return (
+                        <div key={client.id} className="space-y-6">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground">Program Completion</p>
+                              <p className="text-2xl font-semibold">{client.progress.programCompletion}%</p>
                             </div>
                             <div className="p-4 border rounded-lg">
-                              <p className="text-sm text-muted-foreground">Last Active</p>
+                              <p className="text-sm text-muted-foreground">Total Workouts</p>
+                              <p className="text-2xl font-semibold">{client.progress.totalWorkouts}</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground">Last Workout</p>
                               <p className="text-lg">
-                                {formatDistanceToNow(new Date(client.lastActive), { addSuffix: true })}
+                                {formatDistanceToNow(new Date(client.progress.lastWorkout), { addSuffix: true })}
+                              </p>
+                            </div>
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground">Last Meal Log</p>
+                              <p className="text-lg">
+                                {formatDistanceToNow(new Date(client.progress.lastMeal), { addSuffix: true })}
                               </p>
                             </div>
                           </div>
-                        );
-                      }
-                      return null;
-                    })}
-                  </div>
+                          <div className="p-4 border rounded-lg">
+                            <p className="text-sm text-muted-foreground">Workout Frequency</p>
+                            <p className="text-lg">
+                              {(client.stats.workoutFrequency * 7).toFixed(1)} workouts per week
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
                 </div>
               </TabsContent>
             </Tabs>

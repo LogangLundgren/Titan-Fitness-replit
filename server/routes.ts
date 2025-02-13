@@ -424,40 +424,29 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('[Debug] Fetching coach dashboard for user:', req.user.id);
 
-      // Get all programs created by this coach with client details
+      // Get all programs created by this coach with detailed client information
       const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
-        columns: {
-          id: true,
-          name: true,
-          type: true,
-          cycleLength: true,
-          status: true,
-          createdAt: true,
-        },
         with: {
           clientPrograms: {
-            columns: {
-              id: true,
-              clientId: true,
-              startDate: true,
-              completedWorkouts: true,
-              active: true,
-            },
             with: {
               client: {
-                columns: {
-                  id: true,
-                  userId: true,
-                },
                 with: {
                   user: {
                     columns: {
                       id: true,
                       fullName: true,
                       email: true,
-                      profileData: true,
+                      accountType: true,
                     }
+                  },
+                  workoutLogs: {
+                    orderBy: [desc(workoutLogs.date)],
+                    limit: 10
+                  },
+                  mealLogs: {
+                    orderBy: [desc(mealLogs.date)],
+                    limit: 10
                   }
                 }
               }
@@ -468,32 +457,43 @@ export function registerRoutes(app: Express): Server {
 
       console.log('[Debug] Found programs:', coachPrograms.length);
 
-      // Transform data for the dashboard
+      // Transform data for the dashboard, ensuring all client data is included
       const clients = coachPrograms.flatMap(program =>
         program.clientPrograms
-          .filter(enrollment => enrollment.active) // Only show active enrollments
-          .map(enrollment => ({
-            id: enrollment.client?.id,
-            name: enrollment.client?.user?.fullName || 'Unnamed Client',
-            email: enrollment.client?.user?.email || 'No email provided',
-            programName: program.name,
-            programType: program.type,
-            lastActive: enrollment.startDate,
-            progress: {
-              totalWorkouts: enrollment.completedWorkouts || 0,
+          .filter(enrollment => enrollment.active)
+          .map(enrollment => {
+            const clientUser = enrollment.client?.user;
+            const workouts = enrollment.client?.workoutLogs || [];
+            const meals = enrollment.client?.mealLogs || [];
+
+            return {
+              id: enrollment.client?.id,
+              name: clientUser?.fullName || 'Unnamed Client',
+              email: clientUser?.email || 'No email provided',
+              programName: program.name,
+              programType: program.type,
               lastActive: enrollment.startDate,
-              programCompletion: enrollment.completedWorkouts
-                ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
-                : 0
-            }
-          }))
+              progress: {
+                totalWorkouts: workouts.length,
+                lastWorkout: workouts[0]?.date || enrollment.startDate,
+                lastMeal: meals[0]?.date || enrollment.startDate,
+                programCompletion: Math.round((workouts.length / (program.cycleLength || 1)) * 100),
+              },
+              stats: {
+                averageCalories: meals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / (meals.length || 1),
+                totalWorkouts: workouts.length,
+                workoutFrequency: workouts.length / (program.cycleLength || 1)
+              }
+            };
+          })
       ).filter(client => client.id != null);
 
       const stats = {
         totalClients: clients.length,
         activePrograms: coachPrograms.filter(p => p.status === 'active').length,
         totalWorkouts: coachPrograms.reduce((acc, p) =>
-          acc + p.clientPrograms.reduce((sum, c) => sum + (c.completedWorkouts || 0), 0), 0
+          acc + (p.clientPrograms.reduce((sum, c) =>
+            sum + (c.client?.workoutLogs?.length || 0), 0)), 0
         )
       };
 
