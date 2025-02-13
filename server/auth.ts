@@ -50,9 +50,14 @@ declare global {
         uuid: string;
         userId: number;
         bio: string | null;
-        experience: string | null;
-        certifications: string | null;
-        specialties: string | null;
+        height?: string | null;
+        weight?: string | null;
+        fitnessGoals?: string | null;
+        medicalConditions?: string | null;
+        dietaryRestrictions?: string | null;
+        experience?: string | null;
+        certifications?: string | null;
+        specialties?: string | null;
         socialLinks: Record<string, string> | null;
         isPublicProfile: boolean;
         profilePictureUrl: string | null;
