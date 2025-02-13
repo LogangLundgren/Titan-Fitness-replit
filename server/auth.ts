@@ -5,7 +5,7 @@ import session from "express-session";
 import createMemoryStore from "memorystore";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { users, coaches, clients, insertUserSchema, type User } from "@db/schema";
+import { users, coaches, clients, insertUserSchema } from "@db/schema";
 import { db } from "@db";
 import { eq } from "drizzle-orm";
 
@@ -28,24 +28,36 @@ const crypto = {
   },
 };
 
+// Define the User interface with all required properties
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  password: string;
+  accountType: 'client' | 'coach';
+  fullName?: string;
+  profileData?: any;
+}
+
 declare global {
   namespace Express {
-    interface User extends User {
-      profileData?: any;
-    }
+    interface User extends User {}
   }
 }
 
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
+  const isProduction = app.get("env") === "production";
+
   const sessionSettings: session.SessionOptions = {
     secret: process.env.REPL_ID || "fitcoach-secret",
     resave: false,
     saveUninitialized: false,
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      secure: app.get("env") === "production",
-      httpOnly: true
+      secure: isProduction, // Only use secure cookies in production
+      httpOnly: true,
+      sameSite: isProduction ? 'strict' : 'lax'
     },
     store: new MemoryStore({
       checkPeriod: 86400000, // Clear expired entries every 24h
@@ -53,7 +65,7 @@ export function setupAuth(app: Express) {
     }),
   };
 
-  if (app.get("env") === "production") {
+  if (isProduction) {
     app.set("trust proxy", 1);
   }
 
@@ -64,6 +76,8 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
+        console.log(`[Auth] Attempting login for user: ${username}`);
+
         const [user] = await db
           .select()
           .from(users)
@@ -71,11 +85,13 @@ export function setupAuth(app: Express) {
           .limit(1);
 
         if (!user) {
+          console.log(`[Auth] User not found: ${username}`);
           return done(null, false, { message: "Incorrect username." });
         }
 
         const isMatch = await crypto.compare(password, user.password);
         if (!isMatch) {
+          console.log(`[Auth] Invalid password for user: ${username}`);
           return done(null, false, { message: "Incorrect password." });
         }
 
@@ -97,19 +113,24 @@ export function setupAuth(app: Express) {
           profileData = clientData;
         }
 
+        console.log(`[Auth] Successfully authenticated user: ${username}`);
         return done(null, { ...user, profileData });
       } catch (err) {
+        console.error(`[Auth] Error during authentication:`, err);
         return done(err);
       }
     })
   );
 
-  passport.serializeUser((user, done) => {
+  passport.serializeUser((user: User, done) => {
+    console.log(`[Auth] Serializing user:`, user.id);
     done(null, user.id);
   });
 
   passport.deserializeUser(async (id: number, done) => {
     try {
+      console.log(`[Auth] Deserializing user:`, id);
+
       const [user] = await db
         .select()
         .from(users)
@@ -117,6 +138,7 @@ export function setupAuth(app: Express) {
         .limit(1);
 
       if (!user) {
+        console.log(`[Auth] User not found during deserialization:`, id);
         return done(null, false);
       }
 
@@ -138,16 +160,21 @@ export function setupAuth(app: Express) {
         profileData = clientData;
       }
 
+      console.log(`[Auth] Successfully deserialized user:`, id);
       done(null, { ...user, profileData });
     } catch (err) {
+      console.error(`[Auth] Error during deserialization:`, err);
       done(err);
     }
   });
 
   app.post("/api/register", async (req, res, next) => {
     try {
+      console.log(`[Auth] Processing registration request:`, req.body);
+
       const result = insertUserSchema.safeParse(req.body);
       if (!result.success) {
+        console.log(`[Auth] Invalid registration input:`, result.error.issues);
         return res
           .status(400)
           .send("Invalid input: " + result.error.issues.map(i => i.message).join(", "));
@@ -162,6 +189,7 @@ export function setupAuth(app: Express) {
         .limit(1);
 
       if (existingUser) {
+        console.log(`[Auth] Username already exists:`, username);
         return res.status(400).send("Username already exists");
       }
 
@@ -197,6 +225,8 @@ export function setupAuth(app: Express) {
         profileData = clientProfile;
       }
 
+      console.log(`[Auth] Successfully registered new user:`, newUser.id);
+
       // Regenerate session before login
       req.session.regenerate((err) => {
         if (err) return next(err);
@@ -215,14 +245,23 @@ export function setupAuth(app: Express) {
         });
       });
     } catch (error) {
+      console.error(`[Auth] Error during registration:`, error);
       next(error);
     }
   });
 
   app.post("/api/login", (req, res, next) => {
+    console.log(`[Auth] Processing login request for:`, req.body.username);
+
     passport.authenticate("local", (err: any, user: Express.User, info: IVerifyOptions) => {
-      if (err) return next(err);
-      if (!user) return res.status(400).send(info.message ?? "Login failed");
+      if (err) {
+        console.error(`[Auth] Login error:`, err);
+        return next(err);
+      }
+      if (!user) {
+        console.log(`[Auth] Login failed:`, info.message);
+        return res.status(400).send(info.message ?? "Login failed");
+      }
 
       // Regenerate session before login
       req.session.regenerate((err) => {
@@ -230,6 +269,7 @@ export function setupAuth(app: Express) {
 
         req.login(user, (err) => {
           if (err) return next(err);
+          console.log(`[Auth] Login successful for user:`, user.id);
           return res.json({
             message: "Login successful",
             user: {
@@ -245,17 +285,26 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/logout", (req, res) => {
+    console.log(`[Auth] Processing logout request for user:`, req.user?.id);
+
     // Destroy session completely instead of just logging out
     req.session.destroy((err) => {
       if (err) {
+        console.error(`[Auth] Logout error:`, err);
         return res.status(500).send("Logout failed");
       }
       res.clearCookie('connect.sid'); // Clear session cookie
+      console.log(`[Auth] Logout successful`);
       res.json({ message: "Logout successful" });
     });
   });
 
   app.get("/api/user", (req, res) => {
+    console.log(`[Auth] Checking authentication status:`, {
+      isAuthenticated: req.isAuthenticated(),
+      userId: req.user?.id
+    });
+
     if (req.isAuthenticated()) {
       return res.json(req.user);
     }

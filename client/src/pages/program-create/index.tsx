@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DumbbellIcon, UtensilsIcon, CameraIcon, Users } from "lucide-react";
+import { DumbbellIcon, UtensilsIcon, CameraIcon, Users, PackageIcon } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
@@ -30,6 +30,12 @@ const PROGRAM_TYPES = [
     name: "1-on-1 Coaching",
     description: "Offer personalized coaching and mentorship",
     icon: Users,
+  },
+  {
+    id: "all-inclusive",
+    name: "All-Inclusive Package",
+    description: "Combine existing programs into a comprehensive package",
+    icon: PackageIcon,
   },
 ] as const;
 

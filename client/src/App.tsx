@@ -16,6 +16,7 @@ import CreateProgram from "@/pages/program-create";
 import CreateLiftingProgram from "@/pages/program-create/lifting";
 import CreateDietProgram from "@/pages/program-create/diet";
 import CreatePosingProgram from "@/pages/program-create/posing";
+import CreateAllInclusiveProgram from "@/pages/program-create/all-inclusive";
 import ManageProgram from "@/pages/program-manage/[id]";
 import ProgramLog from "@/pages/program-log/[id]";
 
@@ -51,6 +52,7 @@ function Router() {
           <Route path="/programs/create/lifting" component={CreateLiftingProgram} />
           <Route path="/programs/create/diet" component={CreateDietProgram} />
           <Route path="/programs/create/posing" component={CreatePosingProgram} />
+          <Route path="/programs/create/all-inclusive" component={CreateAllInclusiveProgram} />
           <Route path="/programs/:id/manage" component={ManageProgram} />
           <Route path="/programs/:id/log" component={ProgramLog} />
           <Route path="/profile" component={Profile} />
