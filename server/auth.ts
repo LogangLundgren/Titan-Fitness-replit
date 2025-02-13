@@ -71,19 +71,19 @@ export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
   const sessionSettings: session.SessionOptions = {
     secret: process.env.REPL_ID || "fitcoach-secret",
-    resave: true, // Changed to true to ensure session is saved
-    saveUninitialized: true, // Changed to true to ensure new sessions are saved
+    resave: true,
+    saveUninitialized: true,
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      secure: false, // Changed to false for development
+      secure: false,
       httpOnly: true,
       sameSite: 'lax'
     },
     store: new MemoryStore({
-      checkPeriod: 86400000, // Clear expired entries every 24h
-      stale: false // Don't serve stale data
+      checkPeriod: 86400000,
+      stale: false
     }),
-    name: 'titan.sid' // Custom session ID name
+    name: 'titan.sid'
   };
 
   if (app.get("env") === "production") {
@@ -161,7 +161,6 @@ export function setupAuth(app: Express) {
           } : null
         };
 
-        console.log(`[Auth] Complete user object created with UUID: ${authenticatedUser.uuid}`);
         return done(null, authenticatedUser);
       } catch (err) {
         console.error('[Auth] Error during authentication:', err);
@@ -175,7 +174,7 @@ export function setupAuth(app: Express) {
     done(null, { id: user.id, uuid: user.uuid });
   });
 
-  passport.deserializeUser(async (serialized: { id: number, uuid: string }, done) => {
+  passport.deserializeUser(async (serialized: { id: number; uuid: string }, done) => {
     try {
       console.log(`[Auth] Deserializing user: ${serialized.uuid}`);
       const [user] = await db
