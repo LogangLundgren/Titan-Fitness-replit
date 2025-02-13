@@ -82,7 +82,7 @@ export const coachRelations = relations(coaches, ({ one }) => ({
 export const clientRelations = relations(clients, ({ one }) => ({
   user: one(users, {
     fields: [clients.userId],
-    references: [users.id],
+    references: [clients.id],
   }),
 }));
 
@@ -182,7 +182,7 @@ export const clientProgramRelations = relations(clientPrograms, ({ one, many }) 
     references: [programs.id],
   }),
   workoutLogs: many(workoutLogs),
-  mealLogs: many(mealLogs)
+  mealLogs: many(mealLogs),
 }));
 
 export const workoutLogRelations = relations(workoutLogs, ({ one }) => ({
@@ -197,7 +197,7 @@ export const workoutLogRelations = relations(workoutLogs, ({ one }) => ({
   routine: one(routines, {
     fields: [workoutLogs.routineId],
     references: [routines.id],
-  })
+  }),
 }));
 
 export const mealLogRelations = relations(mealLogs, ({ one }) => ({
@@ -208,7 +208,7 @@ export const mealLogRelations = relations(mealLogs, ({ one }) => ({
   client: one(clients, {
     fields: [mealLogs.clientId],
     references: [clients.id],
-  })
+  }),
 }));
 
 export type User = typeof users.$inferSelect;

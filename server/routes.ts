@@ -422,9 +422,9 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      console.log('[Debug] Fetching coach dashboard for user:', req.user.id);
+      console.log('[Debug] Starting coach dashboard fetch for user:', req.user.id);
 
-      // First get all programs created by this coach
+      // First get all programs created by this coach with their client enrollments
       const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
         with: {
@@ -433,84 +433,103 @@ export function registerRoutes(app: Express): Server {
             with: {
               client: {
                 with: {
-                  user: true
-                }
-              }
-            }
-          }
-        }
+                  user: {
+                    columns: {
+                      id: true,
+                      fullName: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
 
-      console.log('[Debug] Found programs:', coachPrograms.length);
+      console.log('[Debug] Found coach programs:', coachPrograms.length);
 
-      // Get client IDs for further queries
+      // Extract all client program IDs for log queries
       const clientProgramIds = coachPrograms
         .flatMap(p => p.clientPrograms)
         .map(cp => cp.id);
 
-      // Get workout and meal logs in parallel
+      console.log('[Debug] Client program IDs:', clientProgramIds);
+
+      if (clientProgramIds.length === 0) {
+        return res.json({ 
+          clients: [], 
+          stats: { totalClients: 0, activePrograms: 0, totalWorkouts: 0 },
+          programTypes: { lifting: 0, diet: 0, posing: 0, 'all-inclusive': 0 }
+        });
+      }
+
+      // Fetch workout and meal logs in parallel
       const [workoutLogs, mealLogs] = await Promise.all([
         db.query.workoutLogs.findMany({
           where: inArray(workoutLogs.clientProgramId, clientProgramIds),
-          orderBy: [desc(workoutLogs.date)]
+          orderBy: [desc(workoutLogs.date)],
         }),
         db.query.mealLogs.findMany({
           where: inArray(mealLogs.clientProgramId, clientProgramIds),
-          orderBy: [desc(mealLogs.date)]
-        })
+          orderBy: [desc(mealLogs.date)],
+        }),
       ]);
 
-      // Create maps for quick lookup
+      console.log('[Debug] Found logs:', {
+        workouts: workoutLogs.length,
+        meals: mealLogs.length
+      });
+
+      // Create lookup maps for logs
       const workoutLogsMap = new Map();
       const mealLogsMap = new Map();
 
       workoutLogs.forEach(log => {
-        if (!workoutLogsMap.has(log.clientProgramId)) {
-          workoutLogsMap.set(log.clientProgramId, []);
-        }
-        workoutLogsMap.get(log.clientProgramId).push(log);
+        const logs = workoutLogsMap.get(log.clientProgramId) || [];
+        logs.push(log);
+        workoutLogsMap.set(log.clientProgramId, logs);
       });
 
       mealLogs.forEach(log => {
-        if (!mealLogsMap.has(log.clientProgramId)) {
-          mealLogsMap.set(log.clientProgramId, []);
-        }
-        mealLogsMap.get(log.clientProgramId).push(log);
+        const logs = mealLogsMap.get(log.clientProgramId) || [];
+        logs.push(log);
+        mealLogsMap.set(log.clientProgramId, logs);
       });
 
-      // Transform data for the dashboard
-      const clients = coachPrograms.flatMap(program =>
+      // Transform data for dashboard
+      const clients = coachPrograms.flatMap(program => 
         program.clientPrograms.map(enrollment => {
-          const clientUser = enrollment.client.user;
           const workouts = workoutLogsMap.get(enrollment.id) || [];
           const meals = mealLogsMap.get(enrollment.id) || [];
+          const clientUser = enrollment.client.user;
 
           console.log('[Debug] Processing client:', {
             clientId: enrollment.client.id,
-            name: clientUser.fullName,
-            workoutCount: workouts.length,
-            mealCount: meals.length
+            programId: program.id,
+            workouts: workouts.length,
+            meals: meals.length
           });
 
           return {
             id: enrollment.client.id,
             name: clientUser.fullName || 'Unnamed Client',
-            email: clientUser.email || 'No email provided',
+            email: clientUser.email,
             programName: program.name,
             programType: program.type,
             lastActive: enrollment.startDate,
             progress: {
               totalWorkouts: workouts.length,
-              lastWorkout: workouts[0]?.date || enrollment.startDate,
-              lastMeal: meals[0]?.date || enrollment.startDate,
+              lastWorkout: workouts[0]?.date || null,
+              lastMeal: meals[0]?.date || null,
               programCompletion: Math.round((workouts.length / (program.cycleLength || 1)) * 100),
             },
             stats: {
               averageCalories: meals.length > 0 
-                ? meals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / meals.length 
+                ? Math.round(meals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / meals.length)
                 : 0,
               totalWorkouts: workouts.length,
-              workoutFrequency: workouts.length / (program.cycleLength || 1)
+              workoutFrequency: Math.round((workouts.length / (program.cycleLength || 1)) * 100) / 100
             }
           };
         })
@@ -519,7 +538,8 @@ export function registerRoutes(app: Express): Server {
       const stats = {
         totalClients: clients.length,
         activePrograms: coachPrograms.filter(p => p.status === 'active').length,
-        totalWorkouts: Array.from(workoutLogsMap.values()).reduce((acc, logs) => acc + logs.length, 0)
+        totalWorkouts: Array.from(workoutLogsMap.values())
+          .reduce((acc, logs) => acc + logs.length, 0)
       };
 
       const programTypes = {
