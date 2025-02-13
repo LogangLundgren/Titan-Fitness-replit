@@ -3,12 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCard } from "./stats-card";
-import { Users, Target, MessageSquare, Loader2, PlusCircle } from "lucide-react";
+import { Users, Target, MessageSquare, Loader2 } from "lucide-react";
 import { ProgramAnalytics } from "../analytics/program-analytics";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
 
 interface ClientProgress {
   totalWorkouts: number;
@@ -115,15 +113,7 @@ export function CoachDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Coach Dashboard</h1>
-        <Link href="/programs/create">
-          <Button className="flex items-center gap-2">
-            <PlusCircle className="h-4 w-4" />
-            Create New Program
-          </Button>
-        </Link>
-      </div>
+      <h1 className="text-2xl font-bold">Coach Dashboard</h1>
 
       <div className="grid gap-4 md:grid-cols-3">
         <StatsCard

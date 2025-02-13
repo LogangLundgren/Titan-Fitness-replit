@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { PlusCircle } from "lucide-react";
 import { ProgramCard } from "@/components/programs/program-card";
 import { useUser } from "@/hooks/use-user";
 import type { Program } from "@db/schema";
 import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
 
 interface ClientProgram extends Program {
   enrollmentId: number;
@@ -18,7 +19,7 @@ interface ClientProgram extends Program {
 
 export default function Programs() {
   const { user } = useUser();
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
 
   const isCoach = user?.accountType === "coach";
 
@@ -29,6 +30,10 @@ export default function Programs() {
 
   const handleManageProgram = (programId: number) => {
     setLocation(`/programs/${programId}/manage`);
+  };
+
+  const handleCreateProgram = () => {
+    setLocation('/programs/create');
   };
 
   // Loading state with skeleton UI
@@ -53,6 +58,15 @@ export default function Programs() {
         <h1 className="text-3xl font-bold tracking-tight">
           {isCoach ? "My Programs" : "My Enrolled Programs"}
         </h1>
+        {isCoach && (
+          <Button 
+            onClick={handleCreateProgram}
+            className="flex items-center gap-2"
+          >
+            <PlusCircle className="h-4 w-4" />
+            Create New Program
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
