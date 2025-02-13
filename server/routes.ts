@@ -412,7 +412,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Coach dashboard data
+  // Get coach dashboard data
   app.get("/api/coach/dashboard", async (req, res) => {
     if (!req.user || req.user.accountType !== "coach") {
       return res.status(403).json({
@@ -425,51 +425,54 @@ export function registerRoutes(app: Express): Server {
       console.log('[Debug] Fetching coach dashboard for user:', req.user.id);
 
       // Get all programs created by this coach with detailed client information
-      const coachPrograms = await db.query.programs.findMany({
-        where: eq(programs.coachId, req.user.id),
-        with: {
-          clientPrograms: {
-            with: {
-              client: {
-                with: {
-                  user: {
-                    columns: {
-                      id: true,
-                      fullName: true,
-                      email: true,
-                      accountType: true,
-                    }
-                  },
-                  workoutLogs: {
-                    orderBy: [desc(workoutLogs.date)],
-                    limit: 10
-                  },
-                  mealLogs: {
-                    orderBy: [desc(mealLogs.date)],
-                    limit: 10
-                  }
-                }
-              }
-            }
-          }
-        }
-      });
+      const coachPrograms = await db.select({
+        id: programs.id,
+        name: programs.name,
+        type: programs.type,
+        status: programs.status,
+        cycleLength: programs.cycleLength,
+        clientPrograms: db.select({
+          id: clientPrograms.id,
+          startDate: clientPrograms.startDate,
+          active: clientPrograms.active,
+          client: db.select({
+            id: users.id,
+            fullName: users.fullName,
+            email: users.email
+          }).from(users)
+            .where(eq(users.id, clientPrograms.clientId)),
+          workoutLogs: db.select()
+            .from(workoutLogs)
+            .where(eq(workoutLogs.clientProgramId, clientPrograms.id))
+            .orderBy(desc(workoutLogs.date))
+            .limit(10),
+          mealLogs: db.select()
+            .from(mealLogs)
+            .where(eq(mealLogs.clientProgramId, clientPrograms.id))
+            .orderBy(desc(mealLogs.date))
+            .limit(10)
+        })
+        .from(clientPrograms)
+        .where(eq(clientPrograms.programId, programs.id))
+      })
+      .from(programs)
+      .where(eq(programs.coachId, req.user.id));
 
       console.log('[Debug] Found programs:', coachPrograms.length);
 
-      // Transform data for the dashboard, ensuring all client data is included
+      // Transform data for the dashboard
       const clients = coachPrograms.flatMap(program =>
         program.clientPrograms
           .filter(enrollment => enrollment.active)
           .map(enrollment => {
-            const clientUser = enrollment.client?.user;
-            const workouts = enrollment.client?.workoutLogs || [];
-            const meals = enrollment.client?.mealLogs || [];
+            const client = enrollment.client[0]; // Get the first (and should be only) client
+            const workouts = enrollment.workoutLogs;
+            const meals = enrollment.mealLogs;
 
             return {
-              id: enrollment.client?.id,
-              name: clientUser?.fullName || 'Unnamed Client',
-              email: clientUser?.email || 'No email provided',
+              id: client?.id,
+              name: client?.fullName || 'Unnamed Client',
+              email: client?.email || 'No email provided',
               programName: program.name,
               programType: program.type,
               lastActive: enrollment.startDate,
@@ -492,8 +495,7 @@ export function registerRoutes(app: Express): Server {
         totalClients: clients.length,
         activePrograms: coachPrograms.filter(p => p.status === 'active').length,
         totalWorkouts: coachPrograms.reduce((acc, p) =>
-          acc + (p.clientPrograms.reduce((sum, c) =>
-            sum + (c.client?.workoutLogs?.length || 0), 0)), 0
+          acc + p.clientPrograms.reduce((sum, c) => sum + c.workoutLogs.length, 0), 0
         )
       };
 
