@@ -82,7 +82,7 @@ export const coachRelations = relations(coaches, ({ one }) => ({
 export const clientRelations = relations(clients, ({ one }) => ({
   user: one(users, {
     fields: [clients.userId],
-    references: [clients.id],
+    references: [users.id],  // Fix the reference to point to users.id instead of clients.id
   }),
 }));
 

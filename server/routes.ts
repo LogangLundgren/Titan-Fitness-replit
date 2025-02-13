@@ -412,7 +412,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Coach dashboard route
+  // Fixed coach dashboard route
   app.get("/api/coach/dashboard", async (req, res) => {
     if (!req.user || req.user.accountType !== "coach") {
       return res.status(403).json({
@@ -422,8 +422,6 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      console.log('[Debug] Starting coach dashboard fetch for user:', req.user.id);
-
       // First get all programs created by this coach with their client enrollments
       const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
@@ -447,14 +445,10 @@ export function registerRoutes(app: Express): Server {
         },
       });
 
-      console.log('[Debug] Found coach programs:', coachPrograms.length);
-
       // Extract all client program IDs for log queries
       const clientProgramIds = coachPrograms
         .flatMap(p => p.clientPrograms)
         .map(cp => cp.id);
-
-      console.log('[Debug] Client program IDs:', clientProgramIds);
 
       if (clientProgramIds.length === 0) {
         return res.json({ 
@@ -464,52 +458,47 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Fetch workout and meal logs in parallel
-      const [workoutLogs, mealLogs] = await Promise.all([
-        db.query.workoutLogs.findMany({
-          where: inArray(workoutLogs.clientProgramId, clientProgramIds),
-          orderBy: [desc(workoutLogs.date)],
-        }),
-        db.query.mealLogs.findMany({
-          where: inArray(mealLogs.clientProgramId, clientProgramIds),
-          orderBy: [desc(mealLogs.date)],
-        }),
-      ]);
-
-      console.log('[Debug] Found logs:', {
-        workouts: workoutLogs.length,
-        meals: mealLogs.length
+      // Fetch all workout logs first
+      const allWorkoutLogs = await db.query.workoutLogs.findMany({
+        where: inArray(workoutLogs.clientProgramId, clientProgramIds),
+        orderBy: [desc(workoutLogs.date)],
       });
 
-      // Create lookup maps for logs
+      // Then fetch all meal logs
+      const allMealLogs = await db.query.mealLogs.findMany({
+        where: inArray(mealLogs.clientProgramId, clientProgramIds),
+        orderBy: [desc(mealLogs.date)],
+      });
+
+      // Create Maps for logs
       const workoutLogsMap = new Map();
       const mealLogsMap = new Map();
 
-      workoutLogs.forEach(log => {
-        const logs = workoutLogsMap.get(log.clientProgramId) || [];
-        logs.push(log);
-        workoutLogsMap.set(log.clientProgramId, logs);
+      // Populate the maps
+      allWorkoutLogs.forEach(log => {
+        if (log.clientProgramId) {
+          const logs = workoutLogsMap.get(log.clientProgramId) || [];
+          logs.push(log);
+          workoutLogsMap.set(log.clientProgramId, logs);
+        }
       });
 
-      mealLogs.forEach(log => {
-        const logs = mealLogsMap.get(log.clientProgramId) || [];
-        logs.push(log);
-        mealLogsMap.set(log.clientProgramId, logs);
+      allMealLogs.forEach(log => {
+        if (log.clientProgramId) {
+          const logs = mealLogsMap.get(log.clientProgramId) || [];
+          logs.push(log);
+          mealLogsMap.set(log.clientProgramId, logs);
+        }
       });
 
       // Transform data for dashboard
       const clients = coachPrograms.flatMap(program => 
         program.clientPrograms.map(enrollment => {
+          if (!enrollment.client?.user) return null;
+
           const workouts = workoutLogsMap.get(enrollment.id) || [];
           const meals = mealLogsMap.get(enrollment.id) || [];
           const clientUser = enrollment.client.user;
-
-          console.log('[Debug] Processing client:', {
-            clientId: enrollment.client.id,
-            programId: program.id,
-            workouts: workouts.length,
-            meals: meals.length
-          });
 
           return {
             id: enrollment.client.id,
@@ -532,7 +521,7 @@ export function registerRoutes(app: Express): Server {
               workoutFrequency: Math.round((workouts.length / (program.cycleLength || 1)) * 100) / 100
             }
           };
-        })
+        }).filter(Boolean)
       );
 
       const stats = {
@@ -549,12 +538,6 @@ export function registerRoutes(app: Express): Server {
         'all-inclusive': coachPrograms.filter(p => p.type === 'all-inclusive').length
       };
 
-      console.log('[Debug] Sending response:', {
-        clientCount: clients.length,
-        statsData: stats,
-        programTypesData: programTypes
-      });
-
       res.json({ clients, stats, programTypes });
     } catch (error: any) {
       console.error("Error fetching coach dashboard:", error);
@@ -565,39 +548,37 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Client dashboard data
+  // Fixed meal logs orderBy clause
   app.get("/api/client/dashboard", async (req, res) => {
     if (!req.user) {
       return res.status(401).send("Not authenticated");
     }
 
     try {
-      const [workouts, meals] = await Promise.all([
-        db.query.workoutLogs.findMany({
-          where: eq(workoutLogs.clientId, req.user.id),
-          orderBy: [desc(workoutLogs.date)],
-          limit: 10
-        }),
+      const [recentMeals, workoutStats] = await Promise.all([
+        // Recent meals with fixed orderBy syntax
         db.query.mealLogs.findMany({
           where: eq(mealLogs.clientId, req.user.id),
           orderBy: [desc(mealLogs.date)],
           limit: 10
+        }),
+        db.query.workoutLogs.findMany({
+          where: eq(workoutLogs.clientId, req.user.id),
+          orderBy: [desc(workoutLogs.date)],
+          limit: 10
         })
       ]);
 
-      const stats = {
-        totalWorkouts: workouts.length,
-        averageCalories: meals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / (meals.length || 1),
-        programProgress: 0 // To be calculated based on program structure
-      };
-
       res.json({
-        workouts,
-        meals,
-        stats
+        recentMeals,
+        workoutStats,
       });
     } catch (error: any) {
-      res.status(500).send(error.message);
+      console.error("Error fetching client dashboard:", error);
+      res.status(500).json({
+        error: "Failed to fetch dashboard data",
+        details: error.message
+      });
     }
   });
 
@@ -1014,7 +995,7 @@ export function registerRoutes(app: Express): Server {
       }),
       // Recent meals
       db.query.mealLogs.findMany({
-        where: eq(mealLogs.clientId, req.user.id),
+        where: eq(mealLogs.clientId,req.user.id),
         orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
         limit: 10
       }),
@@ -1027,7 +1008,7 @@ export function registerRoutes(app: Express): Server {
       // Nutrition statistics
       db.query.mealLogs.findMany({
         where: eq(mealLogs.clientId, req.user.id),
-        orderBy: (mealLogs, { desc }) => [desc(mealLogs.date)],
+        orderBy: (mealLogs, { desc }) =>[desc(mealLogs.date)],
         limit: 30 // Last 30 days of nutrition data
       })
     ]);
