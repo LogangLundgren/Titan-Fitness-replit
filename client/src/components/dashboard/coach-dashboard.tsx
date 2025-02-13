@@ -3,10 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatsCard } from "./stats-card";
-import { Users, Target, MessageSquare, Loader2 } from "lucide-react";
+import { Users, Target, MessageSquare, Loader2, PlusCircle } from "lucide-react";
 import { ProgramAnalytics } from "../analytics/program-analytics";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 
 interface ClientProgress {
   totalWorkouts: number;
@@ -47,7 +49,6 @@ export function CoachDashboard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Reset state and cleanup when component unmounts or user changes
   useEffect(() => {
     return () => {
       setSelectedClient(null);
@@ -55,15 +56,15 @@ export function CoachDashboard() {
     };
   }, [queryClient, user?.id]);
 
-  const { data: dashboardData, isLoading, error } = useQuery({
-    queryKey: ['coach-dashboard', user?.id],
+  const { data: dashboardData, isLoading, error } = useQuery<DashboardData>({
+    queryKey: ['coach-dashboard'],
     queryFn: async () => {
       try {
         const response = await fetch('/api/coach/dashboard');
         if (!response.ok) {
           throw new Error('Failed to fetch dashboard data');
         }
-        const data = await response.json() as DashboardData;
+        const data = await response.json();
         return data;
       } catch (error) {
         const err = error as Error;
@@ -76,7 +77,7 @@ export function CoachDashboard() {
       }
     },
     enabled: !!user?.id,
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: 30000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     retry: 3
@@ -114,6 +115,16 @@ export function CoachDashboard() {
 
   return (
     <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Coach Dashboard</h1>
+        <Link href="/programs/create">
+          <Button className="flex items-center gap-2">
+            <PlusCircle className="h-4 w-4" />
+            Create New Program
+          </Button>
+        </Link>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-3">
         <StatsCard
           title="Total Clients"

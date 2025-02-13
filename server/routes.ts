@@ -422,29 +422,48 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      // Get all programs created by this coach
+      console.log('[Debug] Fetching coach dashboard for user:', req.user.id);
+
+      // Get all programs created by this coach with simplified relations
       const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
+        columns: {
+          id: true,
+          name: true,
+          type: true,
+          cycleLength: true,
+          status: true,
+          createdAt: true,
+        },
         with: {
           clientPrograms: {
+            columns: {
+              id: true,
+              clientId: true,
+              startDate: true,
+              completedWorkouts: true,
+            },
             with: {
               client: {
+                columns: {
+                  id: true,
+                  userId: true,
+                },
                 with: {
-                  user: true
+                  user: {
+                    columns: {
+                      fullName: true,
+                      email: true,
+                    }
+                  }
                 }
-              },
-              workoutLogs: {
-                orderBy: [desc(workoutLogs.date)],
-                limit: 1
-              },
-              mealLogs: {
-                orderBy: [desc(mealLogs.date)],
-                limit: 1
               }
             }
           }
         }
       });
+
+      console.log('[Debug] Found programs:', coachPrograms.length);
 
       // Transform data for the dashboard
       const clients = coachPrograms.flatMap(program =>
@@ -453,34 +472,38 @@ export function registerRoutes(app: Express): Server {
           name: enrollment.client?.user?.fullName || 'Anonymous Client',
           email: enrollment.client?.user?.email || 'No email provided',
           programName: program.name,
-          lastActive: enrollment.workoutLogs[0]?.date || enrollment.mealLogs[0]?.date || enrollment.startDate,
+          lastActive: enrollment.startDate,
           progress: {
-            totalWorkouts: enrollment.workoutLogs.length,
-            lastActive: enrollment.workoutLogs[0]?.date || enrollment.startDate,
-            programCompletion: enrollment.completedWorkouts 
+            totalWorkouts: enrollment.completedWorkouts || 0,
+            lastActive: enrollment.startDate,
+            programCompletion: enrollment.completedWorkouts
               ? Math.round((enrollment.completedWorkouts / (program.cycleLength || 1)) * 100)
               : 0
           }
         }))
-      ).filter(client => client.id != null); // Filter out any invalid clients
+      ).filter(client => client.id != null);
 
       const stats = {
         totalClients: clients.length,
         activePrograms: coachPrograms.length,
         totalWorkouts: coachPrograms.reduce((acc, p) =>
-          acc + p.clientPrograms.reduce((sum, c) => sum + (c.workoutLogs?.length || 0), 0), 0
+          acc + p.clientPrograms.reduce((sum, c) => sum + (c.completedWorkouts || 0), 0), 0
         )
       };
 
-      res.json({ 
-        clients, 
-        stats,
-        programTypes: {
-          lifting: coachPrograms.filter(p => p.type === 'lifting').length,
-          diet: coachPrograms.filter(p => p.type === 'diet').length,
-          posing: coachPrograms.filter(p => p.type === 'posing').length
-        }
+      const programTypes = {
+        lifting: coachPrograms.filter(p => p.type === 'lifting').length,
+        diet: coachPrograms.filter(p => p.type === 'diet').length,
+        posing: coachPrograms.filter(p => p.type === 'posing').length
+      };
+
+      console.log('[Debug] Sending response:', {
+        clientCount: clients.length,
+        statsData: stats,
+        programTypesData: programTypes
       });
+
+      res.json({ clients, stats, programTypes });
     } catch (error: any) {
       console.error("Error fetching coach dashboard:", error);
       res.status(500).json({
@@ -995,7 +1018,7 @@ export function registerRoutes(app: Express): Server {
       // First verify the program enrollment exists and belongs to this user
       const [enrollment] = await db.query.clientPrograms.findMany({
         where: and(
-          eq(clientPrograms.id, parseInt(req.params.programId)),
+          eq(clientPrograms.id, parseInt(req.paramsprogramId)),
           eq(clientPrograms.clientId, req.user.id)
         ),
         with: {
