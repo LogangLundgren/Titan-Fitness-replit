@@ -412,7 +412,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Get coach dashboard data
+  // Coach dashboard route
   app.get("/api/coach/dashboard", async (req, res) => {
     if (!req.user || req.user.accountType !== "coach") {
       return res.status(403).json({
@@ -424,7 +424,7 @@ export function registerRoutes(app: Express): Server {
     try {
       console.log('[Debug] Fetching coach dashboard for user:', req.user.id);
 
-      // Get all programs created by this coach
+      // First get all programs created by this coach
       const coachPrograms = await db.query.programs.findMany({
         where: eq(programs.coachId, req.user.id),
         with: {
@@ -443,39 +443,40 @@ export function registerRoutes(app: Express): Server {
 
       console.log('[Debug] Found programs:', coachPrograms.length);
 
-      // Get workout and meal logs separately for active client programs
+      // Get client IDs for further queries
       const clientProgramIds = coachPrograms
         .flatMap(p => p.clientPrograms)
         .map(cp => cp.id);
 
-      const [workoutLogsMap, mealLogsMap] = await Promise.all([
-        // Get workout logs
+      // Get workout and meal logs in parallel
+      const [workoutLogs, mealLogs] = await Promise.all([
         db.query.workoutLogs.findMany({
           where: inArray(workoutLogs.clientProgramId, clientProgramIds),
           orderBy: [desc(workoutLogs.date)]
-        }).then(logs =>
-          logs.reduce((map, log) => {
-            if (!map.has(log.clientProgramId)) {
-              map.set(log.clientProgramId, []);
-            }
-            map.get(log.clientProgramId)?.push(log);
-            return map;
-          }, new Map())
-        ),
-        // Get meal logs
+        }),
         db.query.mealLogs.findMany({
           where: inArray(mealLogs.clientProgramId, clientProgramIds),
           orderBy: [desc(mealLogs.date)]
-        }).then(logs =>
-          logs.reduce((map, log) => {
-            if (!map.has(log.clientProgramId)) {
-              map.set(log.clientProgramId, []);
-            }
-            map.get(log.clientProgramId)?.push(log);
-            return map;
-          }, new Map())
-        )
+        })
       ]);
+
+      // Create maps for quick lookup
+      const workoutLogsMap = new Map();
+      const mealLogsMap = new Map();
+
+      workoutLogs.forEach(log => {
+        if (!workoutLogsMap.has(log.clientProgramId)) {
+          workoutLogsMap.set(log.clientProgramId, []);
+        }
+        workoutLogsMap.get(log.clientProgramId).push(log);
+      });
+
+      mealLogs.forEach(log => {
+        if (!mealLogsMap.has(log.clientProgramId)) {
+          mealLogsMap.set(log.clientProgramId, []);
+        }
+        mealLogsMap.get(log.clientProgramId).push(log);
+      });
 
       // Transform data for the dashboard
       const clients = coachPrograms.flatMap(program =>
@@ -483,6 +484,13 @@ export function registerRoutes(app: Express): Server {
           const clientUser = enrollment.client.user;
           const workouts = workoutLogsMap.get(enrollment.id) || [];
           const meals = mealLogsMap.get(enrollment.id) || [];
+
+          console.log('[Debug] Processing client:', {
+            clientId: enrollment.client.id,
+            name: clientUser.fullName,
+            workoutCount: workouts.length,
+            mealCount: meals.length
+          });
 
           return {
             id: enrollment.client.id,
@@ -498,13 +506,15 @@ export function registerRoutes(app: Express): Server {
               programCompletion: Math.round((workouts.length / (program.cycleLength || 1)) * 100),
             },
             stats: {
-              averageCalories: meals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / (meals.length || 1),
+              averageCalories: meals.length > 0 
+                ? meals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / meals.length 
+                : 0,
               totalWorkouts: workouts.length,
               workoutFrequency: workouts.length / (program.cycleLength || 1)
             }
           };
         })
-      ).filter(client => client.id != null);
+      );
 
       const stats = {
         totalClients: clients.length,
