@@ -3,7 +3,7 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
 
-// Refined schema for program exercise data
+// Define schemas first to avoid circular dependencies
 const exerciseSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -38,7 +38,7 @@ export const users = pgTable("users", {
   experience: text("experience"),
   certifications: text("certifications"),
   specialties: text("specialties"),
-  socialLinks: jsonb("social_links").default('{}'),
+  socialLinks: jsonb("social_links"),
   isPublicProfile: boolean("is_public_profile").default(true),
   profilePictureUrl: text("profile_picture_url"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -54,8 +54,7 @@ export const coaches = pgTable("coaches", {
   experience: text("experience"),
   certifications: text("certifications"),
   specialties: text("specialties"),
-  socialLinks: jsonb("social_links").default('{}'),
-  isPublicProfile: boolean("is_public_profile").default(true),
+  socialLinks: jsonb("social_links"),
   profilePictureUrl: text("profile_picture_url"),
 });
 
@@ -330,3 +329,24 @@ export const selectProgramSchema = createSelectSchema(programs);
 
 export const insertBetaSignupSchema = createInsertSchema(betaSignups);
 export const selectBetaSignupSchema = createSelectSchema(betaSignups);
+
+//These were moved to the top to resolve circular dependency
+// const routineSchema = z.object({
+//   id: z.number(),
+//   name: z.string(),
+//   dayOfWeek: z.number().optional(),
+//   orderInCycle: z.number(),
+//   notes: z.string().optional(),
+//   exercises: z.array(exerciseSchema),
+// });
+//
+// const exerciseSchema = z.object({
+//   id: z.number(),
+//   name: z.string(),
+//   description: z.string().optional(),
+//   sets: z.number(),
+//   reps: z.string(),
+//   restTime: z.string().optional(),
+//   notes: z.string().optional(),
+//   orderInRoutine: z.number(),
+// });
