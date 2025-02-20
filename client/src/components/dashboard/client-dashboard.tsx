@@ -9,14 +9,14 @@ import { useUser } from "@/hooks/use-user";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-interface ProgressData {
-  workouts: WorkoutLog[];
-  meals: MealLog[];
+interface DashboardData {
   stats: {
     totalWorkouts: number;
     averageCalories: number;
     programProgress: number;
   };
+  workouts: WorkoutLog[];
+  meals: MealLog[];
 }
 
 export function ClientDashboard() {
@@ -24,7 +24,7 @@ export function ClientDashboard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: progressData, isLoading, error } = useQuery({
+  const { data: dashboardData, isLoading, error } = useQuery<DashboardData>({
     queryKey: ['/api/client/dashboard', user?.id],
     queryFn: async () => {
       try {
@@ -32,8 +32,7 @@ export function ClientDashboard() {
         if (!response.ok) {
           throw new Error('Failed to fetch dashboard data');
         }
-        const data = await response.json() as ProgressData;
-        return data;
+        return await response.json();
       } catch (error) {
         const err = error as Error;
         toast({
@@ -80,7 +79,7 @@ export function ClientDashboard() {
     );
   }
 
-  if (!progressData) {
+  if (!dashboardData) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <p className="text-muted-foreground">No dashboard data available</p>
@@ -88,24 +87,26 @@ export function ClientDashboard() {
     );
   }
 
+  const { stats, workouts, meals } = dashboardData;
+
   return (
     <div className="space-y-8">
       <div className="grid gap-4 md:grid-cols-3">
         <StatsCard
           title="Total Workouts"
-          value={progressData.stats.totalWorkouts}
+          value={stats.totalWorkouts || 0}
           icon={Dumbbell}
           description="Lifetime workouts completed"
         />
         <StatsCard
           title="Daily Calories"
-          value={Math.round(progressData.stats.averageCalories)}
+          value={Math.round(stats.averageCalories) || 0}
           icon={Apple}
           description="Average daily intake"
         />
         <StatsCard
           title="Program Progress"
-          value={`${progressData.stats.programProgress}%`}
+          value={`${stats.programProgress || 0}%`}
           icon={Trophy}
           description="Current program completion"
         />
@@ -113,11 +114,11 @@ export function ClientDashboard() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <WorkoutAnalytics
-          workouts={progressData.workouts}
+          workouts={workouts || []}
           isLoading={isLoading}
         />
         <NutritionAnalytics
-          meals={progressData.meals}
+          meals={meals || []}
           isLoading={isLoading}
         />
       </div>

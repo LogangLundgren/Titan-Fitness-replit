@@ -566,7 +566,7 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      const [recentMeals, workoutStats] = await Promise.all([
+      const [recentMeals, workoutData] = await Promise.all([
         // Recent meals with fixed orderBy syntax
         db.query.mealLogs.findMany({
           where: eq(mealLogs.clientId, req.user.id),
@@ -580,9 +580,19 @@ export function registerRoutes(app: Express): Server {
         })
       ]);
 
+      // Calculate statistics
+      const stats = {
+        totalWorkouts: workoutData.length,
+        averageCalories: recentMeals.length > 0
+          ? Math.round(recentMeals.reduce((acc, meal) => acc + (meal.calories || 0), 0) / recentMeals.length)
+          : 0,
+        programProgress: workoutData.length > 0 ? Math.round((workoutData.length / 30) * 100) : 0
+      };
+
       res.json({
-        recentMeals,
-        workoutStats,
+        stats,
+        workouts: workoutData,
+        meals: recentMeals
       });
     } catch (error: any) {
       console.error("Error fetching client dashboard:", error);
